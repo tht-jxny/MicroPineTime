@@ -25,6 +25,8 @@ freeze('../..',
         'fonts/__init__.py',
         'fonts/clock.py',
         'fonts/sans24.py',
+        'fonts/gotham24.py',
+        'fonts/gotham36.py'
         'fonts/sans36.py',
         'icons.py',
         'logo.py',

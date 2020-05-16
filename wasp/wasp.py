@@ -27,6 +27,10 @@ from apps.pager import PagerApp, CrashApp
 from apps.settings import SettingsApp
 from apps.stopwatch import StopwatchApp
 from apps.testapp import TestApp
+from apps.fibonacci_clock import FibonacciClockApp
+from apps.snake import SnakeGameApp
+from apps.calc import CalculatorApp
+
 
 class EventType():
     """Enumerated interface actions.
@@ -106,10 +110,13 @@ class Manager():
         self._charging = True
 
         # TODO: Eventually these should move to main.py
+        self.register(FibonacciClockApp(), True)
         self.register(ClockApp(), True)
         self.register(StopwatchApp(), True)
         self.register(FlashlightApp(), False)
+        self.register(SnakeGameApp(), False)
         self.register(SettingsApp(), False)
+        self.register(CalculatorApp(), False)
         self.register(TestApp(), False)
 
     def register(self, app, quick_ring=False):

@@ -3,6 +3,8 @@
 
 import fonts.sans24 as sans24
 import fonts.sans36 as sans36
+import fonts.gotham24 as gotham24
+import fonts.gotham36 as gotham36
 
 def height(font):
     return font.height()

@@ -81,8 +81,8 @@ class StopwatchApp():
             else:
                 t = ''
 
-            draw.set_font(fonts.sans24)
-            w = fonts.width(fonts.sans24, t)
+            draw.set_font(fonts.gotham24)
+            w = fonts.width(fonts.gotham24, t)
             draw.string(t, 0, y + (i*24), 240)
 
     def _draw(self):
@@ -111,7 +111,7 @@ class StopwatchApp():
         now = wasp.watch.rtc.get_localtime()
         if now[4] != self._last_clock[4]:
             t1 = '{:02}:{:02}'.format(now[3], now[4])
-            draw.set_font(fonts.sans24)
+            draw.set_font(fonts.gotham24)
             draw.string(t1, 48, 16, 240-96)
             self._last_clock = now
             self._meter.update()
@@ -129,8 +129,8 @@ class StopwatchApp():
             draw.set_font(fonts.sans36)
             w = fonts.width(fonts.sans36, t1)
             draw.string(t1, 180-w, 120-36)
-            draw.fill(0, 0, 120-36, 180-w, 36)
+            draw.fill(0, 0, 120-36, 180-w, 50)
 
-            draw.set_font(fonts.sans24)
+            draw.set_font(fonts.gotham24)
             draw.string(t2, 180, 120-36+18, width=46)
             self._last_count = self._count
