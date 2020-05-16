@@ -1,0 +1,30 @@
+environment:
+  PYTHON: 'C:\Python36'
+
+platform: x86
+
+configuration: Release
+
+init:
+  # Set the relevant Python and pip location to the path
+  - cmd: set PATH=%PYTHON%;%PYTHON%\scripts;%PATH%
+  - cmd: ECHO Path - %PATH%
+
+install:
+  - cmd: pip install -r requirements.txt
+  - cmd: pip install pyinstaller
+  - cmd: cd nordicsemi
+  - cmd: pyinstaller __main__.py --onefile --clean --name adafruit-nrfutil
+
+# Not a project with an msbuild file, build done at install.
+build: None
+
+artifacts:
+  - path: 'nordicsemi\dist\adafruit-nrfutil.exe'
+
+deploy:
+  provider: GitHub
+  force_update: true
+  tag: $(APPVEYOR_REPO_TAG_NAME)
+  auth_token:
+    secure: tcFElKgzcRzCgpqiJ78WTYNO1FTx4Z8aHV47OxlZIfVkulDr/o81jQZ2aLjirvO5
