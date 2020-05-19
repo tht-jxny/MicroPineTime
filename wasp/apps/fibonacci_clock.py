@@ -35,7 +35,7 @@ class FibonacciClockApp():
     
     def calculateColors(self,hr,mn):
         self.field_colors = [0,0,0,0,0]
-        if (hr > 12):
+        if (hr >= 12):
             hr -= 12
         for i in range(5):
             if ((hr - self.fields[i]) >= 0):
