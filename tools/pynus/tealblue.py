@@ -144,7 +144,7 @@ class Device:
         self._services_resolved = threading.Event()
         self._services = None
 
-        if properties['ServicesResolved']:
+        if 'ServicesResolved' in properties:
             self._services_resolved.set()
 
         # Listen to device events (connect, disconnect, ServicesResolved, ...)

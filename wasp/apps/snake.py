@@ -122,6 +122,7 @@ class SnakeGameApp():
         else:
             print("Error!")
       else:
+        self.running = False
         wasp.system.switch(LauncherApp())
 
     def tick(self, ticks):
