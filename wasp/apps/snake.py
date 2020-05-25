@@ -112,13 +112,13 @@ class SnakeGameApp():
       if self.running:
         """Notify the application of a touchscreen swipe event."""
         if event[0] == wasp.EventType.UP:
-            self.snake.setDir(0,15)
-        elif event[0] == wasp.EventType.DOWN:
             self.snake.setDir(0,-15)
+        elif event[0] == wasp.EventType.DOWN:
+            self.snake.setDir(0,15)
         elif event[0] == wasp.EventType.LEFT:
-            self.snake.setDir(15,0)
-        elif event[0] == wasp.EventType.RIGHT:
             self.snake.setDir(-15,0)
+        elif event[0] == wasp.EventType.RIGHT:
+            self.snake.setDir(15,0)
         else:
             print("Error!")
       else:

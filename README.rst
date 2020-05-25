@@ -44,41 +44,73 @@ Documentation
 
 Wasp-os is has `extensive documentation <https://wasp-os.readthedocs.io>`_
 which includes a detailed `Applicaiton Writer's Guide
-<https://daniel-thompson.github.io/wasp-os/appguide.html>`_ to help you
+<https://wasp-os.readthedocs.io/en/latest/appguide.html>`_ to help you
 get started coding for wasp-os as quickly as possible.
 
-Building from a git clone
--------------------------
+Building from source
+--------------------
 
-Get the code from
-`https://github.com/daniel-thompson/wasp-os <https://github.com/daniel-thompson/wasp-os>`_ .
+Building wasp-os and launching the wasp-os simulator requires the
+following python modules: click, numpy, pexpect, PIL (or Pillow),
+pyserial, pysdl2.
+
+On Debian Buster the requires python modules can be obtain with the
+following commands:
 
 .. code-block:: sh
 
-   pip3 install --user click serial pyserial
-   make submodules
-   make softdevice
-   make -j `nproc` BOARD=pinetime all
+    sudo apt install \
+      git build-essential libsdl2-2.0.0 \
+      python3-click python3-numpy python3-pexpect \
+      python3-pil python3-pip python3-serial
+    pip3 install --user pysdl2
+
+You will need a toolchain for the Arm Cortex-M4. wasp-os is developed and
+tested using the `GNU-RM toolchain
+<https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm>`_
+(9-2019-q4) from Arm.
 
 .. note::
-
-    You will need a toolchain for the Arm Cortex-M4. wasp-os is developed and
-    tested using the `GNU-RM toolchain
-    <https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm>`_
-    (9-2019-q4) from Arm.
 
     There are known problems with toolchains older than gcc-7.3 due to problems
     with link-time-optimization (which is enabled by default).
 
+Get the code from
+`https://github.com/daniel-thompson/wasp-os <https://github.com/daniel-thompson/wasp-os>`_ :
+
+.. code-block:: sh
+
+   git clone https://github.com/daniel-thompson/wasp-os
+   cd wasp-os
+   make submodules
+   make softdevice
+
+Build the firmware:
+
+.. code-block:: sh
+
+   make -j `nproc` BOARD=pinetime all
+
+Finally to test out ideas and concepts on the simulator try:
+
+.. code-block:: sh
+
+    make sim
+
+See :ref:`Testing on the simulator` for more details on how
+to use the simulator.
+
 Installing
 ----------
 
-Use an SWD programmer to install ``bootloader.hex`` to the PineTime.  This
-file is an Intel HEX file containing both the bootloader and the Nordic
-SoftDevice. Be careful to disconnect cleanly from the debug software
-since just pulling out the SWD cable will mean the nRF52 will still
-believe it is being debugged (and won't properly enter deep sleep
-modes).
+Use an SWD programmer to install ``bootloader.hex`` to the PineTime.
+This file is an Intel HEX file containing both the bootloader and the Nordic
+SoftDevice. Once the bootloader is installed the watch will boot, display the
+Pine64 logo and wait for a OTA update.
+
+See the `PineTime SWD programming guide <https://wiki.pine64.org/index.php/Reprogramming_the_PineTime>`_
+for instructions on how to reprogram the PineTime using various different SWD
+programmers.
 
 .. note::
 
@@ -86,7 +118,12 @@ modes).
     protection enabled. You must disable the flash protection before trying to
     program it.
 
-To install using Android device:
+    Be careful to disconnect cleanly from the debug software since just pulling
+    out the SWD cable will mean the nRF52 will still believe it is being
+    debugged (which harms battery life because the device won't properly enter
+    deep sleep states).
+
+To install the main firmware using an Android device:
 
 * Copy ``micropython.zip`` to your Android device and download nRF Connect
   for Android if you do not already have it.
@@ -95,7 +132,7 @@ To install using Android device:
 * Connect to PineDFU using nRFConnect, click the DFU button and send
   ``micropython.zip`` to the device.
 
-To install using Linux and ota-dfu:
+To install the main firmware from a GNU/Linux workstation:
 
 * Look up the MAC address for your watch (try: ``sudo hcitool lescan``\ ).
 * Use ota-dfu to upload ``micropython.zip`` to the device. For example:
@@ -107,19 +144,8 @@ you can use the side button to wake it again.
 
 At this point you will also be able to use the Nordic UART Service to
 access the MicroPython REPL, although currently you must send ^C to
-interrupt the program that updates the watch display.
-
-Just for fun try:
-
-.. code-block:: python
-
-   ^C
-   import demo
-   demo.run()
-   # After watching the demo for a bit...
-   ^C
-   wasp.app.draw(watch)
-   wasp.system.run()
+interrupt the program that updates the watch display. You can use 
+``tools/wasptool --console`` to access the MicroPython REPL.
 
 To set the time and restart the main application:
 
@@ -138,7 +164,7 @@ Or just use:
 which can run these commands automatically.
 
 As mentioned above there are many drivers and features still to be
-developed, see the `TODO list <TODO.md>`_ for current status.
+developed, see the :ref:`Roadmap` for current status.
 
 Screenshots
 -----------

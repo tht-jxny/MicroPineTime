@@ -7,7 +7,6 @@
 
 import array
 import fonts.sans24
-import fonts.gotham24
 import micropython
 
 @micropython.viper
@@ -36,15 +35,25 @@ def _bitblit(bitbuf, pixels, bgfg: int, count: int):
             pxp += 1
 
 @micropython.viper
-def _expand_rgb(eightbit: int) -> int:
-    r = eightbit >> 5
-    r = (r << 2) | (r >> 1)
-    g = (eightbit >> 2) & 7
-    g *= 9
-    b = eightbit & 3
-    b *= 10
+def _clut8_rgb565(i: int) -> int:
+    if i < 216:
+        rgb565  = (( i  % 6) * 0x33) >> 3
+        rg = i // 6
+        rgb565 += ((rg  % 6) * (0x33 << 3)) & 0x07e0
+        rgb565 += ((rg // 6) * (0x33 << 8)) & 0xf800
+    elif i < 252:
+        i -= 216
+        rgb565  = (0x7f + (( i  % 3) * 0x33)) >> 3
+        rg = i // 3
+        rgb565 += ((0x4c << 3) + ((rg  % 4) * (0x33 << 3))) & 0x07e0
+        rgb565 += ((0x7f << 8) + ((rg // 4) * (0x33 << 8))) & 0xf800
+    else:
+        i -= 252
+        gr6 = (0x2c + (0x10 * i)) >> 2
+        gr5 = gr6 >> 1
+        rgb565 = (gr5 << 11) + (gr6 << 5) + gr5
 
-    return (r << 11) | (g << 5) | b
+    return rgb565
 
 @micropython.viper
 def _fill(mv, color: int, count: int, offset: int):
@@ -100,7 +109,7 @@ class Draw565(object):
         Default colours are white-on-block (white foreground, black
         background) and the default font is 24pt Sans Serif."""
         self.set_color(0xffff)
-        self.set_font(fonts.gotham24)
+        self.set_font(fonts.sans24)
 
     def fill(self, bg=None, x=0, y=0, w=None, h=None):
         """Draw a solid colour rectangle.
@@ -180,11 +189,11 @@ class Draw565(object):
 
         display.set_window(x, y, sx, sy)
 
-        if sx <= (len(display.linebuffer) / 2) and not bool(sy & 1):
+        if sx <= (len(display.linebuffer) // 4) and not bool(sy & 1):
             sx *= 2
-            sy /= 2
+            sy //= 2
 
-        palette = array.array('H', (0, 0xfffe, 0x7bef, 0xffff))
+        palette = array.array('H', (0, 0x4a69, 0x7bef, 0xffff))
         next_color = 1
         rl = 0
         buf = memoryview(display.linebuffer)[0:2*sx]
@@ -205,7 +214,7 @@ class Draw565(object):
                 if op >= 255:
                     continue
             else:
-                palette[next_color] = _expand_rgb(op)
+                palette[next_color] = _clut8_rgb565(op)
                 if next_color < 3:
                     next_color += 1
                 else:

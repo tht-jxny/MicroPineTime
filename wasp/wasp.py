@@ -26,12 +26,9 @@ from apps.launcher import LauncherApp
 from apps.pager import PagerApp, CrashApp
 from apps.settings import SettingsApp
 from apps.stopwatch import StopwatchApp
-from apps.testapp import TestApp
 from apps.fibonacci_clock import FibonacciClockApp
-#from apps.snake import SnakeGameApp
-#from apps.calc import CalculatorApp
-#from apps.analog import AnalogueClockApp
-
+from apps.snake import SnakeGameApp
+from apps.calc import CalculatorApp
 
 class EventType():
     """Enumerated interface actions.
@@ -114,12 +111,10 @@ class Manager():
         self.register(FibonacciClockApp(), True)
         self.register(ClockApp(), True)
         self.register(StopwatchApp(), True)
-        #self.register(AnalogueClockApp(), True)
         self.register(FlashlightApp(), False)
-       # self.register(SnakeGameApp(), False)
         self.register(SettingsApp(), False)
-       # self.register(CalculatorApp(), False)
-        #self.register(TestApp(), False)
+        self.register(SnakeGameApp(), False)
+        self.register(CalculatorApp(), False)
 
     def register(self, app, quick_ring=False):
         """Register an application with the system.

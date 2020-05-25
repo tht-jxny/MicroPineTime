@@ -666,6 +666,8 @@ calc_symbol_undo = (
     b'\x81\xc6\x04\xd3\xc1\xc0`\xc1A@\xa0F\x05[\x05Z'
     b'\x07X\tW\nT\x0eQ?\x08'
 )
+
+
 # SPDX-License-Identifier: LGPL-3.0-or-latesettingsr
 # Copyright (C) 2020 Johannes Wache
 """Ultra-simple settings application.
@@ -674,7 +676,6 @@ Currently the settings application contains only one setting: brightness
 """
 
 import wasp
-import parser
 
 class CalculatorApp():
     NAME = 'Calc'
@@ -757,12 +758,16 @@ class CalculatorApp():
 
     def calculate(self,s):
         equation = s
+        
+        # Normal calculator stuff    
         for i in range(len(s)):
             if (s[i] =="^"):
                 equation = s[:i] + "**"+s[i+1:]
+            elif (s[i] == ":"):
+                equation = s[:i] + "/"+s[i+1:]
         
         try:
-            result = eval(parser.expr(equation).compile())
+            result = eval(equation)
         except:
             print("Error")
             result = ""
