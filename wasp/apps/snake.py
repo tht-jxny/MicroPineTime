@@ -80,6 +80,7 @@ class SnakeGameApp():
         self.running = True
         self.snake = Snake()
         self.foodLocation()
+        self.highscore = 1
         
 
     def foreground(self):
@@ -148,6 +149,8 @@ class SnakeGameApp():
         draw.fill(x=self.food[0],y=self.food[1],w=15,h=15,bg=0x00ff)
         self.snake.update()
         if (self.snake.endGame()):
+                if self.snake.len > self.highscore:
+                    self.highscore = self.snake.len
                 self.running = False
                 wasp.watch.vibrator.pulse()
                 self.snake = Snake()
@@ -155,6 +158,7 @@ class SnakeGameApp():
                 draw.set_color(0xf000)
                 draw.string('GAME', 0, 60, width=240)
                 draw.string('OVER', 0, 98, width=240)
+                draw.string('Highscore: '+str(self.highscore-1),0,180,width=240)
                 draw.reset()
                 return True
         self.snake.show()

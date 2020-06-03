@@ -710,6 +710,7 @@ class CalculatorApp():
     
     def foreground(self):
         self.drawButtons()
+        self.output = ""
         wasp.system.request_event(wasp.EventMask.TOUCH)
 
     def touch(self, event):

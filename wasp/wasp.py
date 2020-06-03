@@ -29,6 +29,8 @@ from apps.stopwatch import StopwatchApp
 from apps.fibonacci_clock import FibonacciClockApp
 from apps.snake import SnakeGameApp
 from apps.calc import CalculatorApp
+from apps.analogue import AnalogueApp
+
 
 class EventType():
     """Enumerated interface actions.
@@ -114,6 +116,7 @@ class Manager():
         self.register(FlashlightApp(), False)
         self.register(SettingsApp(), False)
         self.register(SnakeGameApp(), False)
+        self.register(AnalogueApp(),True)
         self.register(CalculatorApp(), False)
 
     def register(self, app, quick_ring=False):

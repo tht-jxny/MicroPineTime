@@ -35,8 +35,8 @@ class BatteryMeter(object):
             draw.rleblit(icon, pos=(239-icon[0], 0), fg=0xe73c)
             draw.fill(0, 203, 14, 26, 17)
             width = (level // 7 )*2
-            draw.fill(green, 204 + (25-width), 14, width, 17)
-                
+            draw.fill(green, 205 + (25-width), 13, width, 17)
+
 
             self.level = level
 
