@@ -1,13 +1,19 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2020 Johannes Wache
-"""The complete set of wasp-os application entry points are documented
-below as part of a template application. Note that the template does
-not rely on any specific parent class. This is because applications in
-wasp-os can rely on *duck typing* making a class hierarchy pointless.
 
 """
+Snake Game
+~~~~~~~~~~
 
-# 2-bit RLE, generated from res/snake_game.png, 856 bytes
+This is a classic arcade game called snake. You have to direct the white snake to the food block (blue dot) by swiping in the desired direction. You must not hit the border or the snake's body itself.
+Every time the snake eats the food, its length increases by 1. (In the current version there is an error that the length of the snake is not increased by 1 when the snake gets the food for the first time. This has to be fixed).
+
+Once the game is over, you can try again by tapping on the screen and then swipe in the direction you want to move. If you want to leave the game, simply wipe in any direction once the game is over.
+
+And now: Have fun playing! :)
+"""
+
+# 2-bit RLE, generated from res/snake_icon.png, 856 bytes
 snake_game = (
     b'\x02'
     b'`.'
@@ -70,7 +76,6 @@ snake_game = (
 
 import wasp, time
 from random import randint
-from apps.launcher import LauncherApp
 
 class SnakeGameApp():
     NAME = 'Snake'
@@ -79,31 +84,23 @@ class SnakeGameApp():
     def __init__(self):
         self.running = True
         self.snake = Snake()
-        self.foodLocation()
+        self.food_location()
         self.highscore = 1
-        
+
 
     def foreground(self):
         """Activate the application."""
         wasp.watch.drawable.fill()
-        self._draw()
+        if self.running:
+            self.update()
+        else: 
+            self.snake.show()
+            wasp.watch.drawable.fill(x=self.food[0],y=self.food[1],w=15,h=15,bg=0x00ff)
         wasp.system.request_event(wasp.EventMask.TOUCH |
                                   wasp.EventMask.SWIPE_UPDOWN |
                                   wasp.EventMask.SWIPE_LEFTRIGHT)
         wasp.system.request_tick(250)
 
-    def background(self):
-        """De-activate the application."""
-        pass
-
-    def sleep(self):
-        """Notify the application the device is about to sleep."""
-        return False
-
-    def wake(self):
-        """Notify the application the device is waking up."""
-        pass
-    
     def touch(self,event):
         if not self.running:
             self.running = True
@@ -113,42 +110,33 @@ class SnakeGameApp():
       if self.running:
         """Notify the application of a touchscreen swipe event."""
         if event[0] == wasp.EventType.UP:
-            self.snake.setDir(0,-15)
+            self.snake.set_dir(0,-15)
         elif event[0] == wasp.EventType.DOWN:
-            self.snake.setDir(0,15)
+            self.snake.set_dir(0,15)
         elif event[0] == wasp.EventType.LEFT:
-            self.snake.setDir(-15,0)
+            self.snake.set_dir(-15,0)
         elif event[0] == wasp.EventType.RIGHT:
-            self.snake.setDir(15,0)
-        else:
-            print("Error!")
+            self.snake.set_dir(15,0)
       else:
-        self.running = False
-        wasp.system.switch(LauncherApp())
+        return True
 
     def tick(self, ticks):
         """Notify the application that its periodic tick is due."""
         self.update()
-        
-    
-    def foodLocation(self):
+
+    def food_location(self):
         x = randint(0,15) * 15
         y = randint(0,15) * 15
         self.food = [x,y]
 
-    def _draw(self):
-        if self.running:
-            self.update()
-    
     def update(self):
         draw = wasp.watch.drawable
         """Draw the display from scratch."""
-                       
+
         if (self.snake.eat(self.food)):
-            self.foodLocation()
-        draw.fill(x=self.food[0],y=self.food[1],w=15,h=15,bg=0x00ff)
+            self.food_location()
         self.snake.update()
-        if (self.snake.endGame()):
+        if (self.snake.end_game()):
                 if self.snake.len > self.highscore:
                     self.highscore = self.snake.len
                 self.running = False
@@ -161,7 +149,9 @@ class SnakeGameApp():
                 draw.string('Highscore: '+str(self.highscore-1),0,180,width=240)
                 draw.reset()
                 return True
-        self.snake.show()
+        if self.running:
+            self.snake.show()
+            draw.fill(x=self.food[0],y=self.food[1],w=15,h=15,bg=0x00ff)
         return True
 
 
@@ -173,11 +163,12 @@ class Snake():
         self.xdir = 0
         self.ydir = 0
         self.len = 1
-    
-    def setDir(self,x,y):
+        self.just_eaten = False
+
+    def set_dir(self,x,y):
         self.xdir = x
         self.ydir = y
-    
+
     def update(self):
         head = self.body[-1].copy()
         self.body = self.body[1:]
@@ -189,8 +180,8 @@ class Snake():
         head = self.body[-1]
         self.len += 1
         self.body.append(head)
-        #self.update()
-    
+        self.just_eaten = True
+
     def eat(self,pos):
         x = self.body[-1][0]
         y = self.body[-1][1]
@@ -199,27 +190,30 @@ class Snake():
             return True
         return False
 
-    def endGame(self):
+    def end_game(self):
         x = self.body[-1][0]
         y = self.body[-1][1]
         if (x >= 240 or x < 0) or (y >= 240 or y < 0):
-            print("Inside 1")
             return True
         for i in range(len(self.body)-1):
             part = self.body[i]
             if (part[0] == x and part[1] == y):
-                print("Inside 2")
                 return True
         return False
-    
+
     def show(self):
         draw = wasp.watch.drawable
-        if self.len == 1: #vanish old and show new
+        if self.len == 1: # vanish old and show new
             draw.fill(x=(self.body[0][0]-self.xdir),y=(self.body[0][1]-self.ydir),w=15,h=15,bg=0x0000)
             draw.fill(x=self.body[0][0]+1,y=self.body[0][1]+1,w=13,h=13,bg=0xffff)
-        else: # vanish last and show first
-           draw.fill(x=self.body[0][0],y=self.body[0][1],w=15,h=15,bg=0x0000)
-           draw.fill(x=self.body[-1][0]+1,y=self.body[-1][1]+1,w=13,h=13,bg=0xffff)
+        else: # vanishing old tail and drawing head
+            draw.fill(x=self.body[0][0],y=self.body[0][1],w=15,h=15,bg=0x0000)
+            if self.just_eaten:
+                draw.fill(x=self.body[0][0],y=self.body[0][1],w=15,h=15,bg=0x0000)
+                draw.fill(x=self.body[0][0]+1,y=self.body[0][1]+1,w=13,h=13,bg=0xffff)
+                self.just_eaten = False
+            draw.fill(x=self.body[-1][0]+1,y=self.body[-1][1]+1,w=13,h=13,bg=0xffff)
         #for i in range(self.len):
         #   draw.fill(x=self.body[i][0]+1,y=self.body[i][1]+1,w=13,h=13,bg=0xffff)
+
 

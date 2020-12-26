@@ -992,26 +992,6 @@ class CalculatorApp():
                         ["4","5","6","-",")"],
                         ["1","2","3","*","^"],
                         ["C","0",".",":","="]]
-        self.fields_to_button_path = {"0":calc_num_0,
-                                      "1":calc_num_1,
-                                      "2":calc_num_2,
-                                      "3":calc_num_3,
-                                      "4":calc_num_4,
-                                      "5":calc_num_5,
-                                      "6":calc_num_6,
-                                      "7":calc_num_7,
-                                      "8":calc_num_8,
-                                      "9":calc_num_9,
-                                      "+":calc_symbol_plus,
-                                      "-":calc_symbol_minus,
-                                      "*":calc_symbol_multi,
-                                      ":":calc_symbol_divide,
-                                      ")":calc_symbol_close,
-                                      "(":calc_symbol_open,
-                                      "^":calc_symbol_hat,
-                                      ".":calc_symbol_point,
-                                      "=":calc_symbol_equal,
-                                      "C":calc_symbol_new}
     
     def foreground(self):
         self.drawButtons()
