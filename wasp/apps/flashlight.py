@@ -12,7 +12,13 @@ import wasp
 import icons
 
 class FlashlightApp(object):
-    """Trivial flashlight application."""
+    """Trivial flashlight application.
+
+    .. figure:: res/TorchApp.png
+        :width: 179
+
+        Screenshot of the flashlight application
+    """
     NAME = 'Torch'
     ICON = icons.torch
 
@@ -33,4 +39,4 @@ class FlashlightApp(object):
 
     def draw(self):
         """Redraw the display from scratch."""
-        wasp.watch.display.fill(0xffff)
+        wasp.watch.drawable.fill(0xffff)

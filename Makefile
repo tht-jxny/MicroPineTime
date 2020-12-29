@@ -1,57 +1,81 @@
 export PYTHONPATH := $(PWD)/tools/nrfutil:$(PWD)/tools/intelhex:$(PYTHONPATH)
 
+PYTHON ?= python3
+PYTEST ?= pytest-3
+
 all : bootloader reloader micropython
 
+# If BOARD is undefined then set it up so that expanding it issues an
+# error. That ensures that rules that expand BOARD will be automatically
+# disabled (and give a useful error message) but it creates an additional
+# problem which is that we must never unconditionally expand BOARD.
+# We workaround this by using BOARD_SAFE for every unconditional
+# expansion.
+ifdef BOARD
+BOARD_SAFE = $(BOARD)
+endif
 BOARD ?= $(error Please set BOARD=)
+VERSION ?= $(patsubst v%,%,$(shell git describe --tags))
 
 clean :
 	$(RM) -r \
 		bootloader/_build-$(BOARD)_nrf52832 \
 		reloader/build-$(BOARD) reloader/src/boards/$(BOARD)/bootloader.h \
 		micropython/mpy-cross/build \
-		micropython/ports/nrf/build-$(BOARD)-s132
+		micropython/ports/nrf/build-$(BOARD)-s132 \
+		wasp/boards/$(BOARD)/watch.py
 
+# Avoid a recursive update... it grabs far too much
 submodules :
-	git submodule update --init --recursive
+	git submodule update --init
+	(cd bootloader; git submodule update --init)
+	(cd micropython/ports/nrf; $(MAKE) submodules)
+	(cd reloader; git submodule update --init)
+	(cd wasp/modules/bma42x-upy; git submodule update --init)
 
-bootloader:
+bootloader: build-$(BOARD_SAFE)
+	$(RM) bootloader/_build-$(BOARD)_nrf52832//$(BOARD)_nrf52832_bootloader-*-nosd.hex
 	$(MAKE) -C bootloader/ BOARD=$(BOARD)_nrf52832 all genhex
-	python3 -m nordicsemi dfu genpkg \
-		--bootloader bootloader/_build-$(BOARD)_nrf52832/$(BOARD)_nrf52832_bootloader-*-nosd.hex \
-		--softdevice bootloader/lib/softdevice/s132_nrf52_6.1.1/s132_nrf52_6.1.1_softdevice.hex \
-		bootloader.zip
-	python3 tools/hexmerge.py \
+	$(PYTHON) tools/hexmerge.py \
 		bootloader/_build-$(BOARD)_nrf52832/$(BOARD)_nrf52832_bootloader-*-nosd.hex \
 		bootloader/lib/softdevice/s132_nrf52_6.1.1/s132_nrf52_6.1.1_softdevice.hex \
-		-o bootloader.hex
-	python3 tools/hex2c.py bootloader.hex > \
+		-o build-$(BOARD)/bootloader.hex
+	$(PYTHON) tools/hex2c.py build-$(BOARD)/bootloader.hex > \
 		reloader/src/boards/$(BOARD)/bootloader.h
+	$(PYTHON) -m nordicsemi dfu genpkg \
+		--bootloader bootloader/_build-$(BOARD)_nrf52832//$(BOARD)_nrf52832_bootloader-*-nosd.hex \
+		--softdevice bootloader/lib/softdevice/s132_nrf52_6.1.1/s132_nrf52_6.1.1_softdevice.hex \
+		build-$(BOARD)/bootloader-daflasher.zip
 
-reloader: bootloader
+reloader: bootloader build-$(BOARD_SAFE)
 	$(MAKE) -C reloader/ BOARD=$(BOARD)
-	mv reloader/build-$(BOARD)/reloader.zip .
+	cp reloader/build-$(BOARD)/reloader*.zip build-$(BOARD)
 
 softdevice:
 	micropython/ports/nrf/drivers/bluetooth/download_ble_stack.sh
 
-micropython: wasp/boards/pinetime/watch.py
+wasp/boards/$(BOARD_SAFE)/watch.py : wasp/boards/$(BOARD_SAFE)/watch.py.in
+	(cd wasp; ../tools/preprocess.py boards/$(BOARD)/watch.py.in > boards/$(BOARD)/watch.py) \
+		|| ($(RM) wasp/boards/$(BOARD)/watch.py; false)
+
+micropython: build-$(BOARD_SAFE) wasp/boards/$(BOARD_SAFE)/watch.py
 	$(MAKE) -C micropython/mpy-cross
 	$(RM) micropython/ports/nrf/build-$(BOARD)-s132/frozen_content.c
 	$(MAKE) -C micropython/ports/nrf \
 		BOARD=$(BOARD) SD=s132 \
 		MICROPY_VFS_LFS2=1 \
-		FROZEN_MANIFEST=$(PWD)/wasp/boards/$(BOARD)/manifest.py
-	python3 -m nordicsemi dfu genpkg \
+		FROZEN_MANIFEST=$(PWD)/wasp/boards/$(BOARD)/manifest.py \
+		USER_C_MODULES=$(PWD)/wasp/modules
+	$(PYTHON) -m nordicsemi dfu genpkg \
 		--dev-type 0x0052 \
 		--application micropython/ports/nrf/build-$(BOARD)-s132/firmware.hex \
-		micropython.zip
+		build-$(BOARD)/micropython.zip
 
-wasp/boards/pinetime/watch.py : wasp/boards/pinetime/watch.py.in
-	(cd wasp; ../tools/preprocess.py boards/pinetime/watch.py.in > \
-		                         boards/pinetime/watch.py)
+build-$(BOARD_SAFE):
+	mkdir -p build-$(BOARD)
 
 dfu:
-	python3 -m nordicsemi dfu serial --package micropython.zip --port /dev/ttyACM0
+	$(PYTHON) -m nordicsemi dfu serial --package micropython.zip --port /dev/ttyACM0
 
 flash:
 	pyocd erase -t nrf52 --mass
@@ -70,10 +94,44 @@ docs:
 	$(MAKE) -C docs html
 	touch docs/build/html/.nojekyll
 
-
 sim:
 	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.:wasp/boards/simulator:wasp \
-	python3 -i wasp/main.py
+	$(PYTHON) -i wasp/boards/simulator/main.py
+
+ifeq ("$(origin K)", "command line")
+  PYTEST_RESTRICT = -k '$(K)'
+endif
+
+check:
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.:wasp/boards/simulator:wasp \
+	$(PYTEST) -v -W ignore $(PYTEST_RESTRICT) wasp/boards/simulator
+
 
 .PHONY: bootloader reloader docs micropython
+
+dist: DIST=../wasp-os-$(VERSION)
+dist: k9
+k9: p8
+p8: pinetime
+pinetime : mrproper
+mrproper :
+	$(RM) -r \
+		$(DIST) build-* \
+		bootloader/_build-* \
+		reloader/build-* \
+		reloader/src/boards/*/bootloader.h \
+		micropython/mpy-cross/build \
+		micropython/ports/nrf/build-*
+k9 p8 pinetime:
+	$(RM) wasp/boards/$@/watch.py
+	$(MAKE) BOARD=$@ all
+dist: docs
+	mkdir -p $(DIST)/docs
+	cp COPYING COPYING.LGPL README.rst $(DIST)
+	cp -r docs/build/html/* $(DIST)/docs
+	cp -r build-*/ $(DIST)
+	cp -r tools/ $(DIST)
+	(cd $(DIST); ln -s docs/_images/ res)
+	find $(DIST) -name __pycache__ | xargs $(RM) -r
+	tar -C .. -zcf $(DIST).tar.gz $(notdir $(DIST))
 

@@ -15,6 +15,7 @@
 # Logs and Databases
 ######################
 *.log
+cscope.out
 
 # VIM Swap Files
 ######################
@@ -27,8 +28,7 @@ build-*/
 
 # Test failure outputs
 ######################
-tests/*.exp
-tests/*.out
+tests/results/*
 
 # Python cache files
 ######################

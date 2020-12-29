@@ -42,7 +42,7 @@
 
 #include "tusb.h"
 
-#define CFG_UART_BAUDRATE    115200
+#define CFG_BOARD_UART_BAUDRATE    115200
 
 //--------------------------------------------------------------------+
 // Board Porting API
@@ -78,7 +78,7 @@ int board_uart_write(void const * buf, int len);
   {
     return os_time_ticks_to_ms32( os_time_get() );
   }
-#elif
+#else
   #error "Need to implement board_millis() for this OS"
 #endif
 
@@ -100,15 +100,17 @@ static inline void board_delay(uint32_t ms)
   uint32_t start_ms = board_millis();
   while (board_millis() - start_ms < ms)
   {
+    #if TUSB_OPT_DEVICE_ENABLED
     // take chance to run usb background
     tud_task();
+    #endif
   }
 }
 
-static inline int8_t board_uart_getchar(void)
+static inline int board_uart_getchar(void)
 {
   uint8_t c;
-  return board_uart_read(&c, 1) ? c : (-1);
+  return board_uart_read(&c, 1) ? (int) c : (-1);
 }
 
 static inline int board_uart_putchar(uint8_t c)

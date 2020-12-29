@@ -39,7 +39,7 @@
   #error CFG_TUSB_MCU must be defined
 #endif
 
-#if CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX
+#if CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX || CFG_TUSB_MCU == OPT_MCU_MIMXRT10XX
 #define CFG_TUSB_RHPORT0_MODE       (OPT_MODE_DEVICE | OPT_MODE_HIGH_SPEED)
 #else
 #define CFG_TUSB_RHPORT0_MODE       OPT_MODE_DEVICE
@@ -62,26 +62,26 @@
 #endif
 
 #ifndef CFG_TUSB_MEM_ALIGN
-#define CFG_TUSB_MEM_ALIGN          TU_ATTR_ALIGNED(4)
+#define CFG_TUSB_MEM_ALIGN          __attribute__ ((aligned(4)))
 #endif
 
 //--------------------------------------------------------------------
 // DEVICE CONFIGURATION
 //--------------------------------------------------------------------
 
-#define CFG_TUD_ENDOINT0_SIZE       64
+#ifndef CFG_TUD_ENDPOINT0_SIZE
+#define CFG_TUD_ENDPOINT0_SIZE    64
+#endif
 
 //------------- CLASS -------------//
-#define CFG_TUD_CDC                 0
-#define CFG_TUD_MSC                 0
-#define CFG_TUD_HID                 1
-#define CFG_TUD_MIDI                0
-#define CFG_TUD_CUSTOM_CLASS        0
+#define CFG_TUD_CDC             0
+#define CFG_TUD_MSC             0
+#define CFG_TUD_HID             1
+#define CFG_TUD_MIDI            0
+#define CFG_TUD_VENDOR          0
 
-//------------- HID -------------//
-
-// Should be sufficient to hold ID (if any) + Data
-#define CFG_TUD_HID_BUFSIZE         64
+// HID buffer size Should be sufficient to hold ID (if any) + Data
+#define CFG_TUD_HID_BUFSIZE     64
 
 #ifdef __cplusplus
  }

@@ -40,7 +40,7 @@
   #error CFG_TUSB_MCU must be defined
 #endif
 
-#if CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX
+#if CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX || CFG_TUSB_MCU == OPT_MCU_MIMXRT10XX
 #define CFG_TUSB_RHPORT0_MODE       (OPT_MODE_HOST | OPT_MODE_HIGH_SPEED)
 #else
 #define CFG_TUSB_RHPORT0_MODE       OPT_MODE_HOST
@@ -63,11 +63,11 @@
 #endif
 
 #ifndef CFG_TUSB_MEM_ALIGN
-#define CFG_TUSB_MEM_ALIGN          TU_ATTR_ALIGNED(4)
+#define CFG_TUSB_MEM_ALIGN          __attribute__ ((aligned(4)))
 #endif
 
 //--------------------------------------------------------------------
-// DEVICE CONFIGURATION
+// CONFIGURATION
 //--------------------------------------------------------------------
 
 #define CFG_TUH_HUB                 1
@@ -82,30 +82,16 @@
 //------------- CLASS -------------//
 #define CFG_TUD_CDC                 0
 #define CFG_TUD_MSC                 0
-#define CFG_TUD_CUSTOM_CLASS        0
-
 #define CFG_TUD_HID                 0
-#define CFG_TUD_HID_KEYBOARD        0
-#define CFG_TUD_HID_MOUSE           0
+#define CFG_TUD_VENDOR              0
 
-//--------------------------------------------------------------------
-// CDC
-//--------------------------------------------------------------------
-
-// FIFO size of CDC TX and RX
+// CDC FIFO size of TX and RX
 #define CFG_TUD_CDC_RX_BUFSIZE      64
 #define CFG_TUD_CDC_TX_BUFSIZE      64
 
-//--------------------------------------------------------------------
-// MSC
-//--------------------------------------------------------------------
-
-// Buffer size of Device Mass storage
+// MSC Buffer size of Device Mass storage
 #define CFG_TUD_MSC_BUFSIZE         512
 
-//--------------------------------------------------------------------
-// HID
-//--------------------------------------------------------------------
 
 #ifdef __cplusplus
  }

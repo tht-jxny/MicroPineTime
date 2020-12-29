@@ -106,7 +106,7 @@ void usb_teardown(void);
 #define DFU_MAGIC_FORCE_APP_BOOT        BOARD_MAGIC_FORCE_APP_BOOT       // 0x65
 
 #define DFU_DBL_RESET_MAGIC             0x5A1AD5      // SALADS
-#define DFU_DBL_RESET_DELAY             500
+#define DFU_DBL_RESET_DELAY             2000
 #define DFU_DBL_RESET_MEM               0x20007F7C
 
 #define BOOTLOADER_VERSION_REGISTER     NRF_TIMER2->CC[0]
@@ -122,11 +122,11 @@ enum { BLE_CONN_CFG_HIGH_BANDWIDTH = 1 };
 
 #ifdef NRF52840_XXAA
   // Flash 1024 KB
-  STATIC_ASSERT( APPDATA_ADDR_START == 0xED000);
+  STATIC_ASSERT( APPDATA_ADDR_START == 0xF4000);
 
 #else
   // Flash 512 KB
-  STATIC_ASSERT( APPDATA_ADDR_START == 0x71000);
+  STATIC_ASSERT( APPDATA_ADDR_START == 0x78000);
 #endif
 
 
@@ -200,9 +200,16 @@ int main(void)
 
   /*------------- Determine DFU mode (Serial, OTA, FRESET or normal) -------------*/
   // DFU button pressed
+#ifdef BUTTON_DFU
+  // DFU button is pressed -> request DFU mode (unless forced to avoid)
   dfu_start  = dfu_start || (!force_app_boot && button_pressed(BUTTON_DFU));
+#else
+  //
+  // No DFU button so always request DFU mode!
+  dfu_start  = dfu_start || !force_app_boot;
+#endif
 
-#if BUTTONS_NUMBER >= 2
+#ifdef BUTTON_FRESET
   // DFU + FRESET are pressed --> OTA
   _ota_dfu = _ota_dfu  || ( button_pressed(BUTTON_DFU) && button_pressed(BUTTON_FRESET) ) ;
 #else

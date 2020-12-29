@@ -3,18 +3,25 @@
 #
 
 # libc
-LIBS = -lgcc -lc -lm -lnosys
+LIBS += -lgcc -lm -lnosys
+
+ifneq ($(BOARD), spresense)
+LIBS += -lc
+endif
 
 # TinyUSB Stack source
 SRC_C += \
+	src/tusb.c \
 	src/common/tusb_fifo.c \
 	src/device/usbd.c \
 	src/device/usbd_control.c \
 	src/class/msc/msc_device.c \
 	src/class/cdc/cdc_device.c \
+	src/class/dfu/dfu_rt_device.c \
 	src/class/hid/hid_device.c \
 	src/class/midi/midi_device.c \
-	src/tusb.c \
+	src/class/usbtmc/usbtmc_device.c \
+	src/class/vendor/vendor_device.c \
 	src/portable/$(VENDOR)/$(CHIP_FAMILY)/dcd_$(CHIP_FAMILY).c
 
 # TinyUSB stack include
@@ -42,7 +49,7 @@ endif
 
 # Set all as default goal
 .DEFAULT_GOAL := all
-all: $(BUILD)/$(BOARD)-firmware.bin size
+all: $(BUILD)/$(BOARD)-firmware.bin $(BUILD)/$(BOARD)-firmware.hex size
 
 uf2: $(BUILD)/$(BOARD)-firmware.uf2
 
@@ -102,7 +109,7 @@ size: $(BUILD)/$(BOARD)-firmware.elf
 
 clean:
 	rm -rf $(BUILD)
-	
+
 # Flash binary using Jlink
 ifeq ($(OS),Windows_NT)
   JLINKEXE = JLink.exe
@@ -118,3 +125,7 @@ flash-jlink: $(BUILD)/$(BOARD)-firmware.hex
 	@echo go >> $(BUILD)/$(BOARD).jlink
 	@echo exit >> $(BUILD)/$(BOARD).jlink
 	$(JLINKEXE) -device $(JLINK_DEVICE) -if $(JLINK_IF) -JTAGConf -1,-1 -speed auto -CommandFile $(BUILD)/$(BOARD).jlink
+
+# flash STM32 MCU using stlink with STM32 Cube Programmer CLI
+flash-stlink: $(BUILD)/$(BOARD)-firmware.elf
+	STM32_Programmer_CLI --connect port=swd --write $< --go

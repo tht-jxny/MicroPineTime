@@ -29,12 +29,26 @@
 
 #include <mpconfigboard.h>
 
+#if defined(NRF51822)
+  #include "mpconfigdevice_nrf51822.h"
+#elif defined(NRF52832)
+  #include "mpconfigdevice_nrf52832.h"
+#elif defined(NRF52840)
+  #include "mpconfigdevice_nrf52840.h"
+#elif defined(NRF9160)
+  #include "mpconfigdevice_nrf9160.h"
+#else
+  #pragma error "Device not defined"
+#endif
+
 // options to control how MicroPython is built
 #ifndef MICROPY_VFS
 #define MICROPY_VFS                 (0)
 #endif
 #define MICROPY_ALLOC_PATH_MAX      (512)
+#ifndef MICROPY_PERSISTENT_CODE_LOAD
 #define MICROPY_PERSISTENT_CODE_LOAD (0)
+#endif
 #ifndef MICROPY_EMIT_THUMB
 #define MICROPY_EMIT_THUMB          (0)
 #endif
@@ -46,6 +60,7 @@
 #define MICROPY_ENABLE_FINALISER    (1)
 #define MICROPY_STACK_CHECK         (1)
 #define MICROPY_HELPER_REPL         (1)
+#define MICROPY_REPL_INFO           (1)
 #define MICROPY_REPL_EMACS_KEYS     (0)
 #define MICROPY_REPL_AUTO_INDENT    (1)
 #define MICROPY_KBD_EXCEPTION       (1)
@@ -71,9 +86,16 @@
 #define MICROPY_FATFS_RPATH            (2)
 #define MICROPY_FATFS_MULTI_PARTITION  (1)
 
-// TODO these should be generic, not bound to fatfs
-#define mp_type_fileio fatfs_type_fileio
-#define mp_type_textio fatfs_type_textio
+#if MICROPY_VFS_FAT
+#define mp_type_fileio mp_type_vfs_fat_fileio
+#define mp_type_textio mp_type_vfs_fat_textio
+#elif MICROPY_VFS_LFS1
+#define mp_type_fileio mp_type_vfs_lfs1_fileio
+#define mp_type_textio mp_type_vfs_lfs1_textio
+#elif MICROPY_VFS_LFS2
+#define mp_type_fileio mp_type_vfs_lfs2_fileio
+#define mp_type_textio mp_type_vfs_lfs2_textio
+#endif
 
 // use vfs's functions for import stat and builtin open
 #if MICROPY_VFS
@@ -103,28 +125,30 @@
 #define MICROPY_PY_BUILTINS_HELP    (1)
 #define MICROPY_PY_BUILTINS_HELP_TEXT nrf5_help_text
 #define MICROPY_PY_BUILTINS_HELP_MODULES (1)
-#define MICROPY_PY_BUILTINS_INPUT   (1)
 #define MICROPY_MODULE_BUILTIN_INIT (1)
 #define MICROPY_PY_ALL_SPECIAL_METHODS (0)
 #define MICROPY_PY_MICROPYTHON_MEM_INFO (1)
-#define MICROPY_PY_ARRAY_SLICE_ASSIGN (1)
 #define MICROPY_PY_BUILTINS_SLICE_ATTRS (0)
 #define MICROPY_PY_SYS_EXIT         (1)
 #define MICROPY_PY_SYS_MAXSIZE      (1)
-#define MICROPY_PY_SYS_STDFILES     (1)
 #define MICROPY_PY_SYS_STDIO_BUFFER (0)
 #define MICROPY_PY_COLLECTIONS_ORDEREDDICT (0)
 #define MICROPY_PY_MATH_SPECIAL_FUNCTIONS (0)
 #define MICROPY_PY_CMATH            (0)
-#define MICROPY_PY_IO               (1)
+#ifndef MICROPY_PY_IO
+#define MICROPY_PY_IO               (0)
+#endif
+#ifndef MICROPY_PY_IO_FILEIO
 #define MICROPY_PY_IO_FILEIO        (0)
+#endif
 #define MICROPY_PY_UERRNO           (0)
-#define MICROPY_PY_UBINASCII        (0)
-#define MICROPY_PY_URANDOM          (0)
-#define MICROPY_PY_URANDOM_EXTRA_FUNCS (0)
+#define MICROPY_PY_URANDOM          (1)
+#define MICROPY_PY_URANDOM_EXTRA_FUNCS (1)
 #define MICROPY_PY_UCTYPES          (0)
 #define MICROPY_PY_UZLIB            (0)
+#ifndef MICROPY_PY_UJSON
 #define MICROPY_PY_UJSON            (0)
+#endif
 #define MICROPY_PY_URE              (0)
 #define MICROPY_PY_UHEAPQ           (0)
 #define MICROPY_PY_UHASHLIB         (0)
@@ -176,10 +200,9 @@
 #define MICROPY_PY_MACHINE_RTCOUNTER (0)
 #endif
 
-#ifndef MICROPY_PY_RANDOM_HW_RNG
-#define MICROPY_PY_RANDOM_HW_RNG    (0)
+#ifndef MICROPY_PY_TIME_TICKS
+#define MICROPY_PY_TIME_TICKS       (1)
 #endif
-
 
 #define MICROPY_ENABLE_EMERGENCY_EXCEPTION_BUF   (1)
 #define MICROPY_EMERGENCY_EXCEPTION_BUF_SIZE  (0)
@@ -201,7 +224,7 @@
 
 #define BYTES_PER_WORD (4)
 
-#define MICROPY_MAKE_POINTER_CALLABLE(p) ((void*)((mp_uint_t)(p) | 1))
+#define MICROPY_MAKE_POINTER_CALLABLE(p) ((void *)((mp_uint_t)(p) | 1))
 
 #define MP_SSIZE_MAX (0x7fffffff)
 
@@ -220,7 +243,6 @@ extern const struct _mp_obj_module_t mp_module_utime;
 extern const struct _mp_obj_module_t mp_module_uos;
 extern const struct _mp_obj_module_t mp_module_ubluepy;
 extern const struct _mp_obj_module_t music_module;
-extern const struct _mp_obj_module_t random_module;
 
 #if MICROPY_PY_UBLUEPY
 #define UBLUEPY_MODULE                      { MP_ROM_QSTR(MP_QSTR_ubluepy), MP_ROM_PTR(&mp_module_ubluepy) },
@@ -232,12 +254,6 @@ extern const struct _mp_obj_module_t random_module;
 #define MUSIC_MODULE                        { MP_ROM_QSTR(MP_QSTR_music), MP_ROM_PTR(&music_module) },
 #else
 #define MUSIC_MODULE
-#endif
-
-#if MICROPY_PY_RANDOM_HW_RNG
-#define RANDOM_MODULE                       { MP_ROM_QSTR(MP_QSTR_random), MP_ROM_PTR(&random_module) },
-#else
-#define RANDOM_MODULE
 #endif
 
 #if BOARD_SPECIFIC_MODULES
@@ -265,7 +281,6 @@ extern const struct _mp_obj_module_t ble_module;
     BLE_MODULE \
     MUSIC_MODULE \
     UBLUEPY_MODULE \
-    RANDOM_MODULE \
     MICROPY_BOARD_BUILTINS \
 
 
@@ -277,7 +292,6 @@ extern const struct _mp_obj_module_t ble_module;
     { MP_ROM_QSTR(MP_QSTR_utime), MP_ROM_PTR(&mp_module_utime) }, \
     { MP_ROM_QSTR(MP_QSTR_uos), MP_ROM_PTR(&mp_module_uos) }, \
     MUSIC_MODULE \
-    RANDOM_MODULE \
     MICROPY_BOARD_BUILTINS \
 
 
@@ -331,6 +345,13 @@ extern const struct _mp_obj_module_t ble_module;
     \
     /* micro:bit root pointers */ \
     void *async_data[2]; \
+
+#define MICROPY_EVENT_POLL_HOOK \
+    do { \
+        extern void mp_handle_pending(bool); \
+        mp_handle_pending(true); \
+        __WFI(); \
+    } while (0);
 
 #define MP_PLAT_PRINT_STRN(str, len) mp_hal_stdout_tx_strn_cooked(str, len)
 

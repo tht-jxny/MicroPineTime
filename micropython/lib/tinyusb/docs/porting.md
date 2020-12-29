@@ -1,6 +1,6 @@
 # Porting
 
-TinyUSB is designed to be a universal USB protocol stack for low-cost 32 bit microcontrollers. It
+TinyUSB is designed to be a universal USB protocol stack for microcontrollers. It
 handles most of the high level USB protocol and relies on the microcontroller's USB peripheral for
 data transactions on different endpoints. Porting is the process of adding low-level support for
 the rest of the common stack. Once the low-level is implemented, it is very easy to add USB support
@@ -24,8 +24,6 @@ Now that those directories are in place, we can start our iteration process to g
 Unless, you've read ahead, this will fail miserably. Now, lets get it to fail less by updating the files in the board directory. The code in the board's directory is responsible for setting up the microcontroller's clocks and pins so that USB works. TinyUSB itself only operates on the USB peripheral. The board directory also includes information what files are needed to build the example.
 
 One of the first things to change is the `-DCFG_TUSB_MCU` cflag in the `board.mk` file. This is used to tell TinyUSB what platform is being built. So, add an entry to `src/tusb_option.h` and update the CFLAG to match.
-
-Also, add an entry for the board in `hw/bsp/board.h`. The CFLAG is auto-added.
 
 Update `board.mk`'s VENDOR and CHIP_FAMILY values when creating the directory for the struct files. Duplicate one of the other sources from `src/portable` into `src/portable/<vendor>/<chip_family>` and delete all of the implementation internals. We'll cover what everything there does later. For now, get it compiling.
 
@@ -104,7 +102,7 @@ Calls to this look like:
 
     dcd_event_setup_received(0, setup, true);
 
-As before with `dcd_event_bus_signal` the first argument is the USB peripheral number and the third is true to signal its being called from an interrup handler. The middle argument is byte array of length 8 with the contents of the SETUP packet. It can be stack allocated because it is copied into the queue.
+As before with `dcd_event_bus_signal` the first argument is the USB peripheral number and the third is true to signal its being called from an interrupt handler. The middle argument is byte array of length 8 with the contents of the SETUP packet. It can be stack allocated because it is copied into the queue.
 
 #### Endpoints
 
@@ -123,19 +121,29 @@ Also make sure to enable endpoint specific interrupts.
 
 ##### dcd_edpt_xfer
 
-`dcd_edpt_xfer` is responsible for configuring the peripheral to send or receive data from the host. "xfer" is short for "transfer". **This is one of the core methods you must implement for TinyUSB to work (one other is the interrupt handler).**  Data from the host is the OUT direction and data to the host is IN. In other words, direction is relative to the host.
+`dcd_edpt_xfer` is responsible for configuring the peripheral to send or receive data from the host. "xfer" is short for "transfer". **This is one of the core methods you must implement for TinyUSB to work (one other is the interrupt handler).**  Data from the host is the OUT direction and data to the host is IN. It  is used for all endpoints including the control endpoint 0. Make sure to handle the zero-length packet STATUS packet on endpoint 0 correctly. It may be a special transaction to the peripheral.
 
-`dcd_edpt_xfer` is used for all endpoints including the control endpoint 0. Make sure to handle the zero-length packet STATUS packet on endpoint 0 correctly. It may be a special transaction to the peripheral.
+Besides that, all other transactions are relatively straight-forward. The endpoint address provides the endpoint
+number and direction which usually determines where to write the buffer info. The buffer and its length are usually
+written to a specific location in memory and the peripheral is told the data is valid. (Maybe by writing a 1 to a
+register or setting a counter register to 0 for OUT or length for IN.)
 
-Besides that, all other transactions are relatively straight-forward. The endpoint address provides the endpoint number and direction which usually determines where to write the buffer info. The buffer and its length are usually written to a specific location in memory and the peripheral is told the data is valid. (Maybe by writing a 1 to a register or setting a counter register to 0 for OUT or length for IN.)
+The transmit buffer alignment is determined by `CFG_TUSB_MEM_ALIGN`.
 
-TODO: can we promise the buffer is word aligned?
-
-One potential pitfall is that the buffer may be longer than the maximum endpoint size of one USB packet. Some peripherals can handle transmitting multiple USB packets for a provided buffer (like the SAMD21). Others (like the nRF52) may need each USB packet queued individually. To make this work you'll need to track some state for yourself and queue up an intermediate USB packet from the interrupt handler.
+One potential pitfall is that the buffer may be longer than the maximum endpoint size of one USB
+packet. Some peripherals can handle transmitting multiple USB packets for a provided buffer (like the SAMD21).
+Others (like the nRF52) may need each USB packet queued individually. To make this work you'll need to track
+some state for yourself and queue up an intermediate USB packet from the interrupt handler.
 
 Once the transaction is going, the interrupt handler will notify TinyUSB of transfer completion.
+During transmission, the IN data buffer is guarenteed to remain unchanged in memory until the `dcd_xfer_complete` function is called.
 
-TODO: who handles zero-length data packets?
+The dcd_edpt_xfer function must never add zero-length-packets (ZLP) on its own to a transfer. If a ZLP is required,
+then it must be explicitly sent by the stack calling dcd_edpt_xfer(), by calling dcd_edpt_xfer() a second time with len=0.
+For control transfers, this is automatically done in `usbd_control.c`.
+
+At the moment, only a single buffer can be transmitted at once. There is no provision for double-buffering. new dcd_edpt_xfer() will not
+be called again on the same endpoint address until the driver calls dcd_xfer_complete() (except in cases of USB resets).
 
 ##### dcd_xfer_complete
 

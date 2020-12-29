@@ -29,10 +29,8 @@
 #if CFG_TUD_MSC
 
 // Some MCU doesn't have enough 8KB SRAM to store the whole disk
-// We will use Flash as read-only disk
-#if CFG_TUSB_MCU == OPT_MCU_LPC13XX
-#define DISK_READONLY
-#endif
+// We will use Flash as read-only disk with board that has
+// CFG_EXAMPLE_MSC_READONLY defined
 
 #define README_CONTENTS \
 "This is tinyusb's MassStorage Class demo.\r\n\r\n\
@@ -45,7 +43,7 @@ enum
   DISK_BLOCK_SIZE = 512
 };
 
-#ifdef DISK_READONLY
+#ifdef CFG_EXAMPLE_MSC_READONLY
 const
 #endif
 uint8_t msc_disk[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] =
@@ -155,7 +153,7 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_siz
 // Invoked when received Start Stop Unit command
 // - Start = 0 : stopped power mode, if load_eject = 1 : unload disk storage
 // - Start = 1 : active mode, if load_eject = 1 : load disk storage
-void tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject)
+bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject)
 {
   (void) lun;
   (void) power_condition;
@@ -170,6 +168,8 @@ void tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, boo
       // unload disk storage
     }
   }
+
+  return true;
 }
 
 // Callback invoked when received READ10 command.
@@ -190,7 +190,7 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
 {
   (void) lun;
 
-#ifndef DISK_READONLY
+#ifndef CFG_EXAMPLE_MSC_READONLY
   uint8_t* addr = msc_disk[lba] + offset;
   memcpy(addr, buffer, bufsize);
 #else

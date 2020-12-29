@@ -42,7 +42,7 @@
 
 #define READLINE_HIST_SIZE (MP_ARRAY_SIZE(MP_STATE_PORT(readline_hist)))
 
-enum { ESEQ_NONE, ESEQ_ESC, ESEQ_ESC_BRACKET, ESEQ_ESC_BRACKET_DIGIT, ESEQ_ESC_O };
+enum { ESEQ_NONE, ESEQ_ESC, ESEQ_ESC_BRACKET, ESEQ_ESC_BRACKET_DIGIT, ESEQ_ESC_O, ESEQ_CR };
 
 void readline_init0(void) {
     memset(MP_STATE_PORT(readline_hist), 0, READLINE_HIST_SIZE * sizeof(const char*));
@@ -74,6 +74,7 @@ STATIC void mp_hal_move_cursor_back(uint pos) {
         // snprintf needs space for the terminating null character
         int n = snprintf(&vt100_command[0], sizeof(vt100_command), "\x1b[%u", pos);
         if (n > 0) {
+            assert((unsigned)n < sizeof(vt100_command));
             vt100_command[n] = 'D'; // replace null char
             mp_hal_stdout_tx_strn(vt100_command, n + 1);
         }
@@ -98,11 +99,42 @@ typedef struct _readline_t {
 
 STATIC readline_t rl;
 
+#if MICROPY_REPL_EMACS_WORDS_MOVE
+STATIC size_t cursor_count_word(int forward) {
+    const char *line_buf = vstr_str(rl.line);
+    size_t pos = rl.cursor_pos;
+    bool in_word = false;
+
+    for (;;) {
+        // if moving backwards and we've reached 0... break
+        if (!forward && pos == 0) {
+            break;
+        }
+        // or if moving forwards and we've reached to the end of line... break
+        else if (forward && pos == vstr_len(rl.line)) {
+            break;
+        }
+
+        if (unichar_isalnum(line_buf[pos + (forward - 1)])) {
+            in_word = true;
+        } else if (in_word) {
+            break;
+        }
+
+        pos += forward ? forward : -1;
+    }
+
+    return forward ? pos - rl.cursor_pos : rl.cursor_pos - pos;
+}
+#endif
+
 int readline_process_char(int c) {
     size_t last_line_len = rl.line->len;
     int redraw_step_back = 0;
     bool redraw_from_cursor = false;
     int redraw_step_forward = 0;
+    if (rl.escape_seq == ESEQ_CR && c != '\n')
+	rl.escape_seq = ESEQ_NONE;
     if (rl.escape_seq == ESEQ_NONE) {
         if (CHAR_CTRL_A <= c && c <= CHAR_CTRL_E && vstr_len(rl.line) == rl.orig_line_len) {
             // control character with empty line
@@ -148,7 +180,16 @@ int readline_process_char(int c) {
             redraw_step_back = rl.cursor_pos - rl.orig_line_len;
             redraw_from_cursor = true;
         #endif
-        } else if (c == '\r') {
+        #if MICROPY_REPL_EMACS_EXTRA_WORDS_MOVE
+        } else if (c == CHAR_CTRL_W) {
+            goto backward_kill_word;
+        #endif
+        } else if (c == '\r' || c == '\n') {
+	    // Treat carriage return as a special escape sequence so that we
+	    // can skip a subsequent linefeed (if there is one)
+	    if (c == '\r')
+		rl.escape_seq = ESEQ_CR;
+
             // newline
             mp_hal_stdout_tx_str("\r\n");
             readline_push_history(vstr_null_terminated_str(rl.line) + rl.orig_line_len);
@@ -221,9 +262,40 @@ int readline_process_char(int c) {
             case 'O':
                 rl.escape_seq = ESEQ_ESC_O;
                 break;
+            #if MICROPY_REPL_EMACS_WORDS_MOVE
+            case 'b':
+#if MICROPY_REPL_EMACS_EXTRA_WORDS_MOVE
+backward_word:
+#endif
+                redraw_step_back = cursor_count_word(0);
+                rl.escape_seq = ESEQ_NONE;
+                break;
+            case 'f':
+#if MICROPY_REPL_EMACS_EXTRA_WORDS_MOVE
+forward_word:
+#endif
+                redraw_step_forward = cursor_count_word(1);
+                rl.escape_seq = ESEQ_NONE;
+                break;
+            case 'd':
+                vstr_cut_out_bytes(rl.line, rl.cursor_pos, cursor_count_word(1));
+                redraw_from_cursor = true;
+                rl.escape_seq = ESEQ_NONE;
+                break;
+            case 127:
+#if MICROPY_REPL_EMACS_EXTRA_WORDS_MOVE
+backward_kill_word:
+#endif
+                redraw_step_back = cursor_count_word(0);
+                vstr_cut_out_bytes(rl.line, rl.cursor_pos - redraw_step_back, redraw_step_back);
+                redraw_from_cursor = true;
+                rl.escape_seq = ESEQ_NONE;
+                break;
+            #endif
             default:
                 DEBUG_printf("(ESC %d)", c);
                 rl.escape_seq = ESEQ_NONE;
+                break;
         }
     } else if (rl.escape_seq == ESEQ_ESC_BRACKET) {
         if ('0' <= c && c <= '9') {
@@ -311,6 +383,24 @@ delete_key:
             } else {
                 DEBUG_printf("(ESC [ %c %d)", rl.escape_seq_buf[0], c);
             }
+        #if MICROPY_REPL_EMACS_EXTRA_WORDS_MOVE
+        } else if (c == ';' && rl.escape_seq_buf[0] == '1') {
+            // ';' is used to separate parameters. so first parameter was '1',
+            // that's used for sequences like ctrl+left, which we will try to parse.
+            // escape_seq state is reset back to ESEQ_ESC_BRACKET, as if we've just received
+            // the opening bracket, because more parameters are to come.
+            // we don't track the parameters themselves to keep low on logic and code size. that
+            // might be required in the future if more complex sequences are added.
+            rl.escape_seq = ESEQ_ESC_BRACKET;
+            // goto away from the state-machine, as rl.escape_seq will be overridden.
+            goto redraw;
+        } else if (rl.escape_seq_buf[0] == '5' && c == 'C') {
+            // ctrl+right
+            goto forward_word;
+        } else if (rl.escape_seq_buf[0] == '5' && c == 'D') {
+            // ctrl+left
+            goto backward_word;
+        #endif
         } else {
             DEBUG_printf("(ESC [ %c %d)", rl.escape_seq_buf[0], c);
         }
@@ -328,6 +418,10 @@ delete_key:
     } else {
         rl.escape_seq = ESEQ_NONE;
     }
+
+#if MICROPY_REPL_EMACS_EXTRA_WORDS_MOVE
+redraw:
+#endif
 
     // redraw command prompt, efficiently
     if (redraw_step_back > 0) {

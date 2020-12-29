@@ -1,12 +1,19 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2020 Daniel Thompson
 
+def nop():
+    pass
+schedule = nop
+def _callback(obj):
+    schedule()
+
 # Start measuring time (and feeding the watchdog) before *anything* else
 from machine import RTCounter
 from drivers.nrf_rtc import RTC
-rtc = RTC(RTCounter(1, mode=RTCounter.PERIODIC))
+rtc = RTC(RTCounter(1, mode=RTCounter.PERIODIC, period=1, callback=_callback))
 rtc.counter.start()
 
+import gc
 import os
 import time
 
@@ -18,11 +25,15 @@ from machine import Pin
 from machine import SPI
 
 from drivers.battery import Battery
+from drivers.bma421 import BMA421
 from drivers.cst816s import CST816S
+from drivers.hrs3300 import HRS3300
 from drivers.signal import Signal
 from drivers.st7789 import ST7789_SPI
 from drivers.vibrator import Vibrator
 from flash.flash_spi import FLASH
+
+from ubluepy import uart_connected as connected
 
 class Backlight(object):
     lo = Pin("BL_LO", Pin.OUT, value=0)
@@ -58,44 +69,68 @@ display = ST7789_SPI(240, 240, spi,
         res=Pin("DISP_RST", Pin.OUT))
 drawable = draw565.Draw565(display)
 
-# Setup the last few bits and pieces
-battery = Battery(
-        Pin('BATTERY', Pin.IN),
-        Signal(Pin('CHARGING', Pin.IN), invert=True),
-        Signal(Pin('USB_PWR', Pin.IN), invert=True))
+def boot_msg(s):
+    drawable.string(s, 0, 108, width=240)
+    if safe_mode:
+        time.sleep_ms(500)
+
+safe_mode = False
+boot_msg("Init button")
 button = Pin('BUTTON', Pin.IN)
-i2c = I2C(1, scl='I2C_SCL', sda='I2C_SDA')
-touch = CST816S(i2c)
-vibrator = Vibrator(Pin('MOTOR', Pin.OUT, value=0), active_low=True)
+safe_mode = button.value()
+if safe_mode:
+    backlight.set(1)
+    time.sleep(1)
 
-# Release flash from deep power-down
-nor_cs = Pin('NOR_CS', Pin.OUT, value=1)
-nor_cs(0)
-spi.write('\xAB')
-nor_cs(1)
-
-# Mount the filesystem
-flash = FLASH(spi, (Pin('NOR_CS', Pin.OUT, value=1),))
 try:
-    os.mount(flash, '/flash')
-except AttributeError:
-    # Format the filesystem (and provide a default version of main.py)
-    os.VfsLfs2.mkfs(flash)
-    os.mount(flash,'/flash')
-    with open('/flash/main.py', 'w') as f:
-        f.write('''\
+    # Setup the last few bits and pieces
+    boot_msg("Init hardware")
+    battery = Battery(
+            Pin('BATTERY', Pin.IN),
+            Signal(Pin('CHARGING', Pin.IN), invert=True),
+            Signal(Pin('USB_PWR', Pin.IN), invert=True))
+    i2c = I2C(1, scl='I2C_SCL', sda='I2C_SDA')
+    accel = BMA421(i2c)
+    hrs = HRS3300(i2c)
+    touch = CST816S(i2c,
+                    Pin('TP_INT', Pin.IN), Pin('TP_RST', Pin.OUT, value=0),
+                    _callback)
+    vibrator = Vibrator(Pin('MOTOR', Pin.OUT, value=0), active_low=True)
+
+    # Mount the filesystem
+    boot_msg("Init SPINOR")
+    flash = FLASH(spi, (Pin('NOR_CS', Pin.OUT, value=1),))
+    try:
+        boot_msg("Mount FS")
+        os.mount(flash, '/flash')
+    except AttributeError:
+        # Format the filesystem (and provide a default version of main.py)
+        boot_msg("Format FS")
+        os.VfsLfs2.mkfs(flash)
+        boot_msg("Retry mount FS")
+        os.mount(flash,'/flash')
+        boot_msg("Write main.py")
+        with open('/flash/main.py', 'w') as f:
+            f.write('''\
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2020 Daniel Thompson
 
 import wasp
-wasp.system.run()
+from gadgetbridge import *
+wasp.system.schedule()
 ''')
 
-# Only change directory if the button is not pressed (this will
-# allow us access to fix any problems with main.py)!
-if not button.value():
-    os.chdir('/flash')
-    backlight.set(1)
-else:
-    display.poweroff()
+    # Only change directory if the button is not pressed (this will
+    # allow us access to fix any problems with main.py)!
+    if not safe_mode:
+        boot_msg("Enter /flash")
+        os.chdir('/flash')
+        boot_msg("main.py")
+    else:
+        boot_msg("Safe mode")
+except:
+    drawable.string("FAILED", 0, 136, width=240)
+backlight.set(1)
 
+gc.collect()
+free = gc.mem_free()

@@ -7,6 +7,7 @@
 
 import array
 import fonts.sans24
+import math
 import micropython
 
 @micropython.viper
@@ -64,6 +65,9 @@ def _fill(mv, color: int, count: int, offset: int):
         p[x] = color
 
 def _bounding_box(s, font):
+    if not s:
+        return (0, font.height())
+
     w = 0
     for ch in s:
         (_, h, wc) = font.get_ch(ch)
@@ -125,12 +129,35 @@ class Draw565(object):
         :param h:  Height of the rectangle, defaults to None (which means select
                    the bottom-most pixel of the display)
         """
+        display = self._display
+        quick_write = display.quick_write
+
         if bg is None:
             bg = self._bgfg >> 16
-        self._display.fill(bg, x, y, w, h)
+        if w is None:
+            w = display.width - x
+        if h is None:
+            h = display.height - y
+
+        display.set_window(x, y, w, h)
+
+        remaining = w * h
+
+        # Populate the line buffer
+        buf = display.linebuffer
+        sz = len(display.linebuffer) // 2
+        _fill(buf, bg, min(sz, remaining), 0)
+
+        display.quick_start()
+        while remaining >= sz:
+            quick_write(buf)
+            remaining -= sz
+        if remaining:
+            quick_write(memoryview(display.linebuffer)[0:2*remaining])
+        display.quick_end()
 
     @micropython.native
-    def blit(self, image, x, y):
+    def blit(self, image, x, y, fg=0xffff, c1=0x4a69, c2=0x7bef):
         """Decode and draw an encoded image.
 
         :param image: Image data in either 1-bit RLE or 2-bit RLE formats. The
@@ -140,10 +167,10 @@ class Draw565(object):
         """
         if len(image) == 3:
             # Legacy 1-bit image
-            self.rleblit(image, (x, y))
+            self.rleblit(image, (x, y), fg)
         else: #elif image[0] == 2:
             # 2-bit RLE image, (255x255, v1)
-            self._rle2bit(image, x, y)
+            self._rle2bit(image, x, y, fg, c1, c2)
 
     @micropython.native
     def rleblit(self, image, pos=(0, 0), fg=0xffff, bg=0):
@@ -179,7 +206,7 @@ class Draw565(object):
                 color = bg
 
     @micropython.native
-    def _rle2bit(self, image, x, y):
+    def _rle2bit(self, image, x, y, fg, c1, c2):
         """Decode and draw a 2-bit RLE image."""
         display = self._display
         quick_write = display.quick_write
@@ -193,7 +220,7 @@ class Draw565(object):
             sx *= 2
             sy //= 2
 
-        palette = array.array('H', (0, 0x4a69, 0x7bef, 0xffff))
+        palette = array.array('H', (0, c1, c2, fg))
         next_color = 1
         rl = 0
         buf = memoryview(display.linebuffer)[0:2*sx]
@@ -252,7 +279,7 @@ class Draw565(object):
         """
         self._font = font
 
-    def string(self, s, x, y, width=None):
+    def string(self, s, x, y, width=None, right=False):
         """Draw a string at the supplied position.
 
         :param s:     String to render
@@ -264,25 +291,33 @@ class Draw565(object):
                       be filled with the background colour (to ensure that if
                       we update one string with a narrower one there is no
                       need to "undraw" it)
+        :param right: If True (and width is set) then right justify rather than
+                      centre the text
         """
         display = self._display
         bgfg = self._bgfg
         font = self._font
+        bg = self._bgfg >> 16
 
         if width:
             (w, h) = _bounding_box(s, font)
-            leftpad = (width - w) // 2
-            rightpad = width - w - leftpad
-            display.fill(0, x, y, leftpad, h)
+            if right:
+                leftpad = width - w
+                rightpad = 0
+            else:
+                leftpad = (width - w) // 2
+                rightpad = width - w - leftpad
+            self.fill(bg, x, y, leftpad, h)
             x += leftpad
 
         for ch in s:
             glyph = font.get_ch(ch)
             _draw_glyph(display, glyph, x, y, bgfg)
+            self.fill(bg, x+glyph[2], y, 1, glyph[1])
             x += glyph[2] + 1
 
         if width:
-            display.fill(0, x, y, rightpad, h)
+            self.fill(bg, x, y, rightpad, h)
 
     def wrap(self, s, width):
         """Chunk a string so it can rendered within a specified width.
@@ -330,3 +365,92 @@ class Draw565(object):
             chunks.append(end)
 
         return chunks
+
+    def line(self, x0, y0, x1, y1, width=1, color=None):
+        """Draw a line between points (x0, y0) and (x1, y1).
+
+        Example:
+
+        .. code-block:: python
+
+            draw = wasp.watch.drawable
+            draw.line(0, 120, 240, 240, 0xf800)
+
+        :param x0: X coordinate of the start of the line
+        :param y0: Y coordinate of the start of the line
+        :param x1: X coordinate of the end of the line
+        :param y1: Y coordinate of the end of the line
+        :param width: Width of the line in pixels
+        :param color: Colour to draw line, defaults to the foreground colour
+        """
+        if color is None:
+            color = self._bgfg & 0xffff
+        px = bytes(((color >> 8) & 0xFF, color & 0xFF)) * (width * width)
+        write_data = self._display.write_data
+        set_window = self._display.set_window
+
+        dw = (width - 1) // 2
+        x0 -= dw
+        y0 -= dw
+        x1 -= dw
+        y1 -= dw
+
+        dx =  abs(x1 - x0)
+        sx = 1 if x0 < x1 else -1
+        dy = -abs(y1 - y0)
+        sy = 1 if y0 < y1 else -1
+        err = dx + dy
+        if dx == 0 or dy == 0:
+            if x1 < x0 or y1 < y0:
+                x0, x1 = x1, x0
+                y0, y1 = y1, y0
+            w = width if dx == 0 else (dx + width)
+            h = width if dy == 0 else (-dy + width)
+            self.fill(color, x0, y0, w, h)
+            return
+        while True:
+            set_window(x0, y0, width, width)
+            write_data(px)
+            if x0 == x1 and y0 == y1:
+                break
+            e2 = 2 * err
+            if e2 >= dy:
+                err += dy
+                x0 += sx
+            if e2 <= dx:
+                err += dx;
+                y0 += sy;
+        
+    def polar(self, x, y, theta, r0, r1, width=1, color=None):
+        """Draw a line using polar coordinates.
+
+        The coordinate system is tuned for clock applications so it
+        adopts navigational conventions rather than mathematical ones.
+        Specifically the reference direction is drawn vertically
+        upwards and the angle is measures clockwise in degrees.
+
+        Example:
+
+        .. code-block:: python
+
+            draw = wasp.watch.drawable
+            draw.line(360 / 12, 16, 64)
+
+        :param theta: Angle, in degrees
+        :param r0: Radius of the start of the line
+        :param y0: Radius of the end of the line
+        :param x: X coordinate of the origin
+        :param y: Y coordinate of the origin
+        :param width: Width of the line in pixels
+        :param color: Colour to draw line in, defaults to the foreground colour
+        """
+        to_radians = math.pi / 180
+        xdelta = math.sin(theta * to_radians)
+        ydelta = math.cos(theta * to_radians)
+
+        x0 = x + int(xdelta * r0)
+        x1 = x + int(xdelta * r1)
+        y0 = y - int(ydelta * r0)
+        y1 = y - int(ydelta * r1)
+
+        self.line(x0, y0, x1, y1, width, color)

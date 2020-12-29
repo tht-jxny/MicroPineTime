@@ -26,16 +26,13 @@ class PagerApp():
 
     def foreground(self):
         """Activate the application."""
-        self._page = 0
-        self._chunks = wasp.watch.drawable.wrap(self._msg, 240)
-        self._numpages = (len(self._chunks) - 2) // 9
         wasp.system.request_event(wasp.EventMask.SWIPE_UPDOWN)
-        self._draw()
+        self._redraw()
 
     def background(self):
         """De-activate the application."""
-        del self._chunks
-        del self._numpages
+        self._chunks = None
+        self._numpages = None
 
     def swipe(self, event):
         """Swipe to page up/down."""
@@ -55,8 +52,15 @@ class PagerApp():
         self._draw()
         mute(False)
 
+    def _redraw(self):
+        """Redraw from scratch (jump to the first page)"""
+        self._page = 0
+        self._chunks = wasp.watch.drawable.wrap(self._msg, 240)
+        self._numpages = (len(self._chunks) - 2) // 9
+        self._draw()
+
     def _draw(self):
-        """Draw the display from scratch."""
+        """Draw a page from scratch."""
         draw = wasp.watch.drawable
         draw.fill()
 
@@ -72,6 +76,57 @@ class PagerApp():
         scroll.up = page > 0
         scroll.down = page < self._numpages
         scroll.draw()
+
+class NotificationApp(PagerApp):
+    NAME = 'Notifications'
+
+    def __init__(self):
+        super().__init__('')
+        self.confirmation_view = wasp.widgets.ConfirmationView()
+
+    def foreground(self):
+        notes = wasp.system.notifications
+        note = notes.pop(next(iter(notes)))
+        title = note['title'] if 'title' in note else 'Untitled'
+        body = note['body'] if 'body' in note else ''
+        self._msg = '{}\n\n{}'.format(title, body)
+
+        wasp.system.request_event(wasp.EventMask.TOUCH)
+        super().foreground()
+
+    def background(self):
+        self.confirmation_view.active = False
+        super().background()
+
+    def swipe(self, event):
+        if self.confirmation_view.active:
+            if event[0] == wasp.EventType.UP:
+                self.confirmation_view.active = False
+                self._draw()
+                return
+        else:
+            if event[0] == wasp.EventType.DOWN and self._page == 0:
+                self.confirmation_view.active = True
+                self._draw()
+                return
+
+        super().swipe(event)
+
+    def _draw(self):
+        if self.confirmation_view.active:
+            self.confirmation_view.draw('Clear notifications?')
+        else:
+            super()._draw()
+
+    def touch(self, event):
+        if self.confirmation_view.active:
+            is_confirmed = self.confirmation_view.touch(event)
+            if is_confirmed:
+                wasp.system.notifications = {}
+                wasp.system.navigate(wasp.EventType.BACK)
+            elif is_confirmed != None:
+                self._draw()
+
 
 class CrashApp():
     """Crash handler application.

@@ -1,4 +1,5 @@
 CFLAGS += \
+  -flto \
   -mthumb \
   -mabi=aapcs \
   -mcpu=cortex-m3 \
@@ -7,26 +8,29 @@ CFLAGS += \
   -DCFG_TUSB_MCU=OPT_MCU_LPC18XX \
   -D__USE_LPCOPEN
 
+# mcu driver cause following warnings
+CFLAGS += -Wno-error=unused-parameter -Wno-error=strict-prototypes
+
+MCU_DIR = hw/mcu/nxp/lpcopen/lpc18xx/lpc_chip_18xx
+
 # All source paths should be relative to the top level.
 LD_FILE = hw/bsp/mcb1800/lpc1857.ld
 
-# TODO remove later
-SRC_C += src/portable/$(VENDOR)/$(CHIP_FAMILY)/hal_$(CHIP_FAMILY).c
-
 SRC_C += \
-	hw/mcu/nxp/lpcopen/lpc_chip_18xx/src/chip_18xx_43xx.c \
-	hw/mcu/nxp/lpcopen/lpc_chip_18xx/src/clock_18xx_43xx.c \
-	hw/mcu/nxp/lpcopen/lpc_chip_18xx/src/gpio_18xx_43xx.c \
-	hw/mcu/nxp/lpcopen/lpc_chip_18xx/src/sysinit_18xx_43xx.c \
-	hw/mcu/nxp/lpcopen/lpc_chip_18xx/src/uart_18xx_43xx.c
+	$(MCU_DIR)/../gcc/cr_startup_lpc18xx.c \
+	$(MCU_DIR)/src/chip_18xx_43xx.c \
+	$(MCU_DIR)/src/clock_18xx_43xx.c \
+	$(MCU_DIR)/src/gpio_18xx_43xx.c \
+	$(MCU_DIR)/src/sysinit_18xx_43xx.c \
+	$(MCU_DIR)/src/uart_18xx_43xx.c
 
 INC += \
-	$(TOP)/hw/mcu/nxp/lpcopen/lpc_chip_18xx/inc \
-	$(TOP)/hw/mcu/nxp/lpcopen/lpc_chip_18xx/inc/config_18xx
+	$(TOP)/$(MCU_DIR)/inc \
+	$(TOP)/$(MCU_DIR)/inc/config_18xx
 
 # For TinyUSB port source
 VENDOR = nxp
-CHIP_FAMILY = lpc18_43
+CHIP_FAMILY = transdimension
 
 # For freeRTOS port source
 FREERTOS_PORT = ARM_CM3

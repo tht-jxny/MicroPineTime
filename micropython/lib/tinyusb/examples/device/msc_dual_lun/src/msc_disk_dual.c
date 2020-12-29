@@ -29,10 +29,8 @@
 #if CFG_TUD_MSC
 
 // Some MCU doesn't have enough 8KB SRAM to store the whole disk
-// We will use Flash as read-only disk
-#if CFG_TUSB_MCU == OPT_MCU_LPC13XX
-#define DISK_READONLY
-#endif
+// We will use Flash as read-only disk with board that has
+// CFG_EXAMPLE_MSC_READONLY defined
 
 enum
 {
@@ -50,7 +48,7 @@ If you find any bugs or get any questions, feel free to file an\r\n\
 issue at github.com/hathach/tinyusb"
 
 
-#ifdef DISK_READONLY
+#ifdef CFG_EXAMPLE_MSC_READONLY
 const
 #endif
 uint8_t msc_disk0[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] =
@@ -131,7 +129,7 @@ uint8_t msc_disk0[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] =
 If you find any bugs or get any questions, feel free to file an\r\n\
 issue at github.com/hathach/tinyusb"
 
-#ifdef DISK_READONLY
+#ifdef CFG_EXAMPLE_MSC_READONLY
 const
 #endif
 uint8_t msc_disk1[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] =
@@ -247,7 +245,7 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_siz
 // Invoked when received Start Stop Unit command
 // - Start = 0 : stopped power mode, if load_eject = 1 : unload disk storage
 // - Start = 1 : active mode, if load_eject = 1 : load disk storage
-void tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject)
+bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject)
 {
   (void) lun;
   (void) power_condition;
@@ -262,6 +260,8 @@ void tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, boo
       // unload disk storage
     }
   }
+
+  return true;
 }
 
 // Callback invoked when received READ10 command.
@@ -278,7 +278,7 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
 // Process data in buffer to disk's storage and return number of written bytes
 int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize)
 {
-#ifndef DISK_READONLY
+#ifndef CFG_EXAMPLE_MSC_READONLY
   uint8_t* addr = (lun ? msc_disk1[lba] : msc_disk0[lba])  + offset;
   memcpy(addr, buffer, bufsize);
 #else

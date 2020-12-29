@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (c) 2020 Daniel Thompson
@@ -29,13 +29,27 @@ def sync(c):
     Sending a random print ensure the final export (of the prompt)
     does not accidentally match a previously issued prompt.
     """
+    verbose = bool(c.logfile)
     tag = ''.join([random.choice(string.ascii_uppercase) for i in range(6)])
 
-    c.send('\x03')
-    c.expect('>>> ')
-    c.sendline(f'print("{tag[:3]}""{tag[3:]}")')
-    c.expect(tag)
-    c.expect('>>> ')
+
+    try:
+        if not verbose:
+            c.logfile = io.StringIO()
+
+        c.send('\x03')
+        c.expect('>>> ')
+        c.sendline(f'print("{tag[:3]}""{tag[3:]}")')
+        c.expect(tag)
+        c.expect('>>> ')
+
+        if not verbose:
+            c.logfile.close()
+            c.logfile = None
+    except pexpect.exceptions.EOF:
+        print("ERROR: Cannot sync with device")
+        print_log(c.logfile)
+        sys.exit(1)
 
 def unsync(c):
     """Set the watch running again.
@@ -44,7 +58,8 @@ def unsync(c):
     process too early then the sendline will not have completed.
     """
     c.sendline('wasp.system.run()')
-    c.expect('Watch is running, use Ctrl-C to stop')
+    c.expect(['Watch is running, use Ctrl-C to stop',
+              'Watch already running in the background'])
     c.send('\x18')
 
 def paste(c, f, verbose=False, chunk=None):
@@ -77,7 +92,20 @@ def paste(c, f, verbose=False, chunk=None):
             chunk()
 
         c.sendline(ln)
-        c.expect('=== ')
+
+        choice = c.expect(['=== ', 'FATAL: uncaught exception [0-9a-f\r]*\n'])
+        if choice == 1:
+            # Capture and display the error message, then exit
+            if not verbose:
+                print('\n~~~')
+            while choice == 1:
+                if not verbose:
+                    print(c.match.group(0).rstrip(), file=sys.stderr)
+                choice = c.expect([pexpect.TIMEOUT, '.*\n'], timeout=2)
+            if not verbose:
+                print('~~~')
+            print('\nPlease reboot your device', file=sys.stderr)
+            sys.exit(16)
 
 def print_log(logfile):
     lines = logfile.getvalue().split('\n')
@@ -140,11 +168,16 @@ def handle_exec(c, fname):
     print_log(log)
     log.close()
 
-def handle_reset(c):
+def handle_reset(c, ota=False):
+    cmd = 'reset'
+    if ota:
+        cmd = 'enter_ota_dfu'
+
     c.send('\x05')
     c.expect('=== ')
     c.sendline('import machine')
-    c.sendline('machine.reset()')
+    c.expect('=== ')
+    c.sendline(f'machine.{cmd}()')
     c.expect('=== ')
     c.send('\x04')
 
@@ -174,6 +207,33 @@ def check_rtc(c):
 
     c.expect('>>> ')
 
+def handle_binary_upload(c, fname):
+    verbose = bool(c.logfile)
+
+    c.sendline(f'f = open("{os.path.basename(fname)}", "wb")')
+    c.expect('>>> ')
+
+    # Absorb the file to be uploaded
+    with open(fname, 'rb') as f:
+        data = f.read()
+    chunksz = 24
+    nchunks = len(data) // chunksz
+    lastchunk = len(data) % chunksz
+
+    if not verbose:
+        print(f'Uploading {fname}:')
+
+    # Send the data
+    for i in pbar(range(0, chunksz*nchunks, chunksz), verbose):
+        c.sendline(f'f.write({repr(data[i:i+chunksz])})')
+        c.expect('>>> ')
+    if lastchunk:
+        c.sendline(f'f.write({repr(data[-lastchunk:])})')
+        c.expect('>>> ')
+
+    c.sendline('f.close()')
+    c.expect('>>> ')
+
 def handle_upload(c, fname):
     verbose = bool(c.logfile)
 
@@ -194,18 +254,24 @@ def handle_upload(c, fname):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='Wasp-os command and control client')
+    parser.add_argument('--bootloader', action='store_true',
+            help="Reboot into the bootloader mode for OTA update")
+    parser.add_argument('--binary', action='store_true',
+            help="Enable non-ASCII mode for suitable commands (such as upload)")
     parser.add_argument('--console', action='store_true',
             help='Launch a REPL session')
     parser.add_argument('--check-rtc', action='store_true',
             help='Compare workstation and watch times')
     parser.add_argument('--device',
-            help='Connect only to a specific named device')
+            help='Connect only to a specific named device (or MAC address)')
     parser.add_argument('--exec',
             help='Execute the contents of a file')
     parser.add_argument('--eval',
             help='Execute the provided python string')
     parser.add_argument('--reset', action='store_true',
             help="Reboot the device (and don't stay in bootloader mode)")
+    parser.add_argument('--ota',
+            help="Deliver an OTA update to the device")
     parser.add_argument('--rtc', action='store_true',
             help='Set the time on the wasp-os device')
     parser.add_argument('--upload',
@@ -214,14 +280,34 @@ if __name__ == '__main__':
             help='Log interaction with the wasp-os device')
 
     args = parser.parse_args()
-    device_name = args.device
 
-    pynus = os.path.dirname(sys.argv[0]) + '/pynus/pynus.py'
+    if args.device:
+        if ':' in args.device:
+            device_args = ' --address ' + args.device
+        else:
+            device_args = ' --device ' + args.device
+    else:
+        device_args = ''
+
+    pynus = os.path.dirname(sys.argv[0]) + '/pynus/pynus.py' + device_args
     console = pexpect.spawn(pynus, encoding='UTF-8')
     if args.verbose:
         console.logfile = sys.stdout
+    else:
+        console.logfile = io.StringIO()
 
-    console.expect('Connect')
+    try:
+        console.expect('Connect.*\(([0-9A-F:]*)\)')
+    except pexpect.exceptions.TIMEOUT:
+        print('ERROR: Cannot find suitable wasp-os device')
+        if not args.verbose:
+            print_log(console.logfile)
+        sys.exit(1)
+    if not args.verbose:
+        console.logfile.close()
+        console.logfile = None
+
+    macaddr = console.match.group(1)
     console.expect('Exit console using Ctrl-X')
     time.sleep(0.5)
     sync(console)
@@ -239,14 +325,28 @@ if __name__ == '__main__':
         handle_eval(console, args.eval)
 
     if args.upload:
-        handle_upload(console, args.upload)
+        if args.binary:
+            handle_binary_upload(console, args.upload)
+        else:
+            handle_upload(console, args.upload)
 
     if args.console:
         console.close()
-        os.execl(pynus, pynus)
+        argv = pynus.split()
+        os.execv(argv[0], argv)
+
+    if args.ota:
+        handle_reset(console, ota=True)
+        time.sleep(1.0)
+        dfu = os.path.dirname(sys.argv[0]) + '/ota-dfu/dfu.py'
+        os.execl(dfu, dfu, '-z', args.ota, '-a', macaddr, '--legacy')
 
     if args.reset:
         handle_reset(console)
+        sys.exit(0)
+
+    if args.bootloader:
+        handle_reset(console, ota=True)
         sys.exit(0)
 
     unsync(console)

@@ -46,8 +46,15 @@ def sleep_ms(ms):
     time.sleep(ms / 1000)
 time.sleep_ms = sleep_ms
 
+import os
+
+class Accel():
+    def reset(self):
+        pass
+
 class Pin():
     def value(v=None):
         pass
 
+accel = Accel()
 button = Pin()

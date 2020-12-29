@@ -3,50 +3,111 @@
 Roadmap
 =======
 
-M1: Dumb watch feature parity
------------------------------
+.. contents::
+   :local:
+   :depth: 1
 
-The focus for M1 is to get wasp-os both to meet feature parity with a dumb
-watch and to have a bootloader and watchdog strategy that is robust enough
-to allow a PineTime case to be confidently glued shut.
+0.4: Integration, Fit and finish
+--------------------------------
+
+For 0.4 we focus on improving the watch/phone integration whilst also taking steps
+to improve the general fit and finish.
 
 Bootloader
 ~~~~~~~~~~
 
-* [X] Basic board ports (PineTime, DS-D6, 96Boards Nitrogen)
-* [X] OTA application update
-* [X] Enable watchdog before starting the application
-* [X] Splash screen
-* [X] Ignore start button for first few seconds
+* [ ] Stay in bootloader after battery run down
+* [ ] Implement power off support (no splash screen)
 
-MicroPython
+Micropython
 ~~~~~~~~~~~
 
-* [X] Basic board ports (PineTime, DS-D6, 96Boards Nitrogen)
-* [X] Long press reset (conditional feeding of the watchdog)
-
-  * [X] Feed dog from REPL polling loop
-  * [X] Feed dog from a tick interrupt
+* [ ] Use SoftDevice sleep logic
 
 Wasp-os
 ~~~~~~~
 
-* [X] Display driver
+* [X] Watch/phone integration with GadgetBridge
 
-  * [X] Display initialization
-  * [X] Bitmap blitting
-  * [X] RLE coder and decoder
-  * [X] Optimized RLE inner loops
+  * [X] Set date/time
+  * [X] Fully fledged wasp-os device class
 
-* [X] Backlight driver
-* [X] Button driver (polling)
-* [X] Battery/charger driver
-* [X] Simple clock and battery level application
-* [X] Basic (WFI) power saving
-* [X] Implement simple RTC for nrf52
+* [ ] Look and feel
 
-M2: Great developer experience
-------------------------------
+  * [X] Add a simple theming approach
+  * [ ] Update icon for Music player
+  * [ ] Introduce fwd/back/vol+/vol- buttons to the music player
+  * [ ] Update icon for Alarm app
+  * [ ] Update art work for buttons in Confirmation view
+  * [X] Reduce the size of the battery charge icon slightly (match bell)
+
+* [ ] Applications
+
+  * [X] Introduce an analog watch face
+  * [ ] Add a sports/activity app (combined stopwatch and trip counter)
+
+wasptool
+~~~~~~~~
+
+* [ ] Integrate a more powerful minifier into the wasptool paste() method
+
+0.3 (a.k.a. M3): Smartwatch
+---------------------------
+
+At M3 we start to build out full fitness tracking and notification
+functionality.
+
+Reloader
+~~~~~~~~
+
+* [X] Pre-flash image verification
+* [X] Post-flash image verification
+* [X] Board identity check
+* [X] UICR update support
+* [X] Improve linker map (everything except linker table at +256K)
+* [X] mcuboot
+
+  * [X] Reconfigurable entry point (allow reloader to run from mcuboot)
+  * [X] Allow reloader to install mcuboot and flash app (from wasp-bootloader)
+  * [X] Allow reloader to install wasp-os (from mcuboot)
+
+Wasp-os
+~~~~~~~
+
+* [X] Enable heart rate sensor
+
+  * [X] HRS3300 driver
+  * [X] HRS data post-processing
+  * [X] Heart rate counter app
+
+* [X] Notifications
+
+  * [X] BLE notification protocol
+  * [X] Notification popups
+  * [X] Notification app (show notification history)
+  * [X] Add (out-of-tree) Gadgetbridge support
+
+* [X] Step counting
+
+  * [X] BMA421 driver
+  * [X] Step counter app
+
+* [X] Automatically enter SPI flash power saving mode
+
+* [X] Documentation
+
+  * [X] Contributors guide (and code of conduct)
+  * [X] Debugging and troubleshooting guide
+  * [X] Screenshots for bootloader and all applications
+  * [X] Improve the install guide
+
+* [X] Simulator
+
+  * [X] Add a simple skin for better screenshots
+  * [X] Full swipe detection (avoid keyboard)
+
+0.2 (a.k.a. M2): Great developer experience
+-------------------------------------------
 
 The focus for M2 is to make development faster and easier by providing
 a file system and file transfer code. This allows much faster
@@ -92,55 +153,44 @@ Wasp-os
   * [X] Optimized "2-bit" RLE encoder and decoder
   * [X] Logarithmic RBG332 <-> RGB56516bit color space conversion
 
-M3: Smartwatch
---------------
+M1: Dumb watch feature parity
+-----------------------------
 
-At M3 we start to build out full fitness tracking and notification
-functionality.
+The focus for M1 is to get wasp-os both to meet feature parity with a dumb
+watch and to have a bootloader and watchdog strategy that is robust enough
+to allow a PineTime case to be confidently glued shut.
 
 Bootloader
 ~~~~~~~~~~
 
-* [ ] Stay in bootloader after battery run down
-* [ ] Implement power off support (no splash screen)
+* [X] Basic board ports (PineTime, DS-D6, 96Boards Nitrogen)
+* [X] OTA application update
+* [X] Enable watchdog before starting the application
+* [X] Splash screen
+* [X] Ignore start button for first few seconds
 
-Reloader
-~~~~~~~~
-
-* [ ] Board identity check
-* [ ] Pre-flash image verification
-* [ ] Post-flash image verification
-* [ ] Error checking
-
-Micropython
+MicroPython
 ~~~~~~~~~~~
 
-* [ ] Use SoftDevice sleep logic
-* [ ] Automatically enter SPI flash power saving mode
+* [X] Basic board ports (PineTime, DS-D6, 96Boards Nitrogen)
+* [X] Long press reset (conditional feeding of the watchdog)
+
+  * [X] Feed dog from REPL polling loop
+  * [X] Feed dog from a tick interrupt
 
 Wasp-os
 ~~~~~~~
 
-* [ ] Enable heart rate sensor
+* [X] Display driver
 
-  * [ ] HRS3300 driver
-  * [ ] HRS data post-processing
-  * [ ] Heart rate counter app
+  * [X] Display initialization
+  * [X] Bitmap blitting
+  * [X] RLE coder and decoder
+  * [X] Optimized RLE inner loops
 
-* [ ] Notifications
-
-  * [ ] BLE notification protocol
-  * [ ] Notification popups
-  * [ ] Notification app (show notification history)
-  * [ ] Find a recommended Android app
-
-* [ ] Step counting
-
-  * [ ] BMA421 driver
-  * [ ] Step counter app
-
-* [ ] Documentation
-
-  * [ ] Debugging and troubleshooting guide
-  * [ ] Screenshots for bootloader and all applications
-  * [ ] Improve the install guide
+* [X] Backlight driver
+* [X] Button driver (polling)
+* [X] Battery/charger driver
+* [X] Simple clock and battery level application
+* [X] Basic (WFI) power saving
+* [X] Implement simple RTC for nrf52

@@ -26,6 +26,9 @@
 #ifndef _TUSB_CONFIG_H_
 #define _TUSB_CONFIG_H_
 
+// testing framework
+#include "unity.h"
+
 #ifdef __cplusplus
  extern "C" {
 #endif
@@ -40,16 +43,16 @@
   #define CFG_TUSB_MCU  OPT_MCU_NRF5X
 #endif
 
-#if CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX
-#define CFG_TUSB_RHPORT0_MODE       (OPT_MODE_DEVICE | OPT_MODE_HIGH_SPEED)
+#if CFG_TUSB_MCU == OPT_MCU_LPC43XX || CFG_TUSB_MCU == OPT_MCU_LPC18XX || CFG_TUSB_MCU == OPT_MCU_MIMXRT10XX
+#define CFG_TUSB_RHPORT0_MODE    (OPT_MODE_DEVICE | OPT_MODE_HIGH_SPEED)
 #else
-#define CFG_TUSB_RHPORT0_MODE       OPT_MODE_DEVICE
+#define CFG_TUSB_RHPORT0_MODE    OPT_MODE_DEVICE
 #endif
 
-#define CFG_TUSB_OS                 OPT_OS_NONE
+#define CFG_TUSB_OS              OPT_OS_NONE
 
 // CFG_TUSB_DEBUG is defined by compiler in DEBUG build
-// #define CFG_TUSB_DEBUG           0
+#define CFG_TUSB_DEBUG           0
 
 /* USB DMA on some MCUs can only access a specific SRAM region with restriction on alignment.
  * Tinyusb use follows macros to declare transferring memory so that they can be put
@@ -63,38 +66,38 @@
 #endif
 
 #ifndef CFG_TUSB_MEM_ALIGN
-#define CFG_TUSB_MEM_ALIGN          TU_ATTR_ALIGNED(4)
+#define CFG_TUSB_MEM_ALIGN       __attribute__ ((aligned(4)))
 #endif
 
 //--------------------------------------------------------------------
 // DEVICE CONFIGURATION
 //--------------------------------------------------------------------
 
-#define CFG_TUD_ENDOINT0_SIZE       64
+#define CFG_TUD_TASK_QUEUE_SZ    100
+#define CFG_TUD_ENDOINT0_SIZE    64
 
 //------------- CLASS -------------//
-#define CFG_TUD_CDC                 1
-#define CFG_TUD_MSC                 1
-#define CFG_TUD_HID                 1
-
-#define CFG_TUD_MIDI                1
-#define CFG_TUD_CUSTOM_CLASS        0
+//#define CFG_TUD_CDC              0
+#define CFG_TUD_MSC              1
+//#define CFG_TUD_HID              0
+//#define CFG_TUD_MIDI             0
+//#define CFG_TUD_VENDOR           0
 
 //------------- CDC -------------//
 
 // FIFO size of CDC TX and RX
-#define CFG_TUD_CDC_RX_BUFSIZE      64
-#define CFG_TUD_CDC_TX_BUFSIZE      64
+#define CFG_TUD_CDC_RX_BUFSIZE   64
+#define CFG_TUD_CDC_TX_BUFSIZE   64
 
 //------------- MSC -------------//
 
 // Buffer size of Device Mass storage
-#define CFG_TUD_MSC_BUFSIZE         512
+#define CFG_TUD_MSC_BUFSIZE      512
 
 //------------- HID -------------//
 
 // Should be sufficient to hold ID (if any) + Data
-#define CFG_TUD_HID_BUFSIZE         16
+#define CFG_TUD_HID_BUFSIZE      16
 
 #ifdef __cplusplus
  }

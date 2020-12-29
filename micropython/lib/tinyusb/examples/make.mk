@@ -2,8 +2,12 @@
 # Common make definition for all examples
 #
 
-# Compiler 
+# Compiler
+ifeq ($(BOARD), fomu)
+CROSS_COMPILE = riscv-none-embed-
+else
 CROSS_COMPILE = arm-none-eabi-
+endif
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 OBJCOPY = $(CROSS_COMPILE)objcopy
@@ -21,11 +25,17 @@ __check_defined = \
     $(if $(value $1),, \
     $(error Undefined make flag: $1$(if $2, ($2))))
 
+
+define newline
+
+
+endef
+
 # Select the board to build for.
 ifeq ($(BOARD),)
   $(info You must provide a BOARD parameter with 'BOARD=')
-  $(info Possible values are:)
-  $(info $(sort $(subst /.,,$(subst $(TOP)/hw/bsp/,,$(wildcard $(TOP)/hw/bsp/*/.)))))
+  $(info Supported boards are:)
+  $(info $(sort $(subst /.,,$(subst $(TOP)/hw/bsp/, $(newline)-,$(wildcard $(TOP)/hw/bsp/*/.)))))
   $(error BOARD not defined)
 else
   ifeq ($(wildcard $(TOP)/hw/bsp/$(BOARD)/.),)
@@ -40,6 +50,7 @@ BUILD = _build/build-$(BOARD)
 include $(TOP)/hw/bsp/$(BOARD)/board.mk
 
 # Include all source C in board folder
+SRC_C += hw/bsp/board.c
 SRC_C += $(subst $(TOP)/,,$(wildcard $(TOP)/hw/bsp/$(BOARD)/*.c))
 
 # Compiler Flags
@@ -50,8 +61,10 @@ CFLAGS += \
 	-Wno-endif-labels \
 	-Wstrict-prototypes \
 	-Wall \
+	-Wextra \
 	-Werror \
 	-Werror-implicit-function-declaration \
+	-Wfatal-errors \
 	-Wfloat-equal \
 	-Wundef \
 	-Wshadow \
@@ -70,7 +83,12 @@ CFLAGS += \
 
 # Debugging/Optimization
 ifeq ($(DEBUG), 1)
-  CFLAGS += -O0 -ggdb -DCFG_TUSB_DEBUG=1
+  CFLAGS += -Og -ggdb
 else
-  CFLAGS += -flto -Os
+	CFLAGS += -Os
+endif
+
+# TUSB Logging option
+ifneq ($(LOG),)
+  CFLAGS += -DCFG_TUSB_DEBUG=$(LOG)
 endif

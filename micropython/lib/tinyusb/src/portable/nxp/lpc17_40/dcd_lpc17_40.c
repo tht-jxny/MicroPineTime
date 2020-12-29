@@ -172,8 +172,8 @@ void dcd_init(uint8_t rhport)
 
   //------------- user manual 11.13 usb device controller initialization -------------//
   // step 6 : set up control endpoint
-  set_ep_size(0, CFG_TUD_ENDOINT0_SIZE);
-  set_ep_size(1, CFG_TUD_ENDOINT0_SIZE);
+  set_ep_size(0, CFG_TUD_ENDPOINT0_SIZE);
+  set_ep_size(1, CFG_TUD_ENDPOINT0_SIZE);
 
   bus_reset();
 
@@ -293,7 +293,7 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const * p_endpoint_desc)
       break;
 
     case TUSB_XFER_ISOCHRONOUS:
-      TU_ASSERT((epnum % 3) == 3 && (epnum != 15));
+      TU_ASSERT((epnum % 3) == 0 && (epnum != 0) && (epnum != 15));
       break;
 
     default:
@@ -314,14 +314,6 @@ bool dcd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const * p_endpoint_desc)
   sie_write(SIE_CMDCODE_ENDPOINT_SET_STATUS + ep_id, 1, 0);    // clear all endpoint status
 
   return true;
-}
-
-bool dcd_edpt_busy(uint8_t rhport, uint8_t ep_addr)
-{
-  (void) rhport;
-
-  uint8_t ep_id = ep_addr2idx( ep_addr );
-  return (_dcd.udca[ep_id] != NULL && !_dcd.udca[ep_id]->retired);
 }
 
 void dcd_edpt_stall(uint8_t rhport, uint8_t ep_addr)
@@ -503,7 +495,7 @@ static void dd_complete_isr(uint8_t rhport, uint8_t ep_id)
 }
 
 // main USB IRQ handler
-void hal_dcd_isr(uint8_t rhport)
+void dcd_isr(uint8_t rhport)
 {
   uint32_t const dev_int_status = LPC_USB->DevIntSt & LPC_USB->DevIntEn;
   LPC_USB->DevIntClr = dev_int_status;// Acknowledge handled interrupt

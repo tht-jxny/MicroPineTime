@@ -3,9 +3,15 @@
 
 """ Simulated ST7789 display and CST816S touchscreen. """
 
+import warnings
+warnings.simplefilter("ignore", lineno=58)
+
 import sys
 import sdl2
 import sdl2.ext
+import numpy as np
+from PIL import Image
+import wasp
 
 CASET = 0x2a
 RASET = 0x2b
@@ -13,6 +19,13 @@ RAMWR = 0x2c
 
 WIDTH = 240
 HEIGHT = 240
+
+SKIN = {
+    'fname' : 'res/simulator_skin.png',
+    'size' : (337, 427),
+    'button_profile' : 9,
+    'offset' : (53, 93)
+}
 
 class ST7789Sim(object):
     def __init__(self):
@@ -24,6 +37,11 @@ class ST7789Sim(object):
         self.cmd = 0
 
     def write(self, data):
+        # Converting data to a memoryview ensures we act more like spi.write()
+        # when running in a real device (e.g. data must be  bytes-like object
+        # that implements the buffer protocol)
+        data = memoryview(data)
+
         if len(data) == 1:
             # Assume if we get a byte at a time then it is command.
             # This is a simplification do we don't have to track
@@ -60,7 +78,9 @@ class ST7789Sim(object):
                          ((rgb & 0x07e0) << 5) +
                          ((rgb & 0x001f) << 3))
             
-                pixelview[self.x][self.y] = pixel
+                pv_x = self.x + SKIN['adjust'][0]
+                pv_y = self.y + SKIN['adjust'][1]
+                pixelview[pv_x][pv_y] = pixel
 
                 self.x += 1
                 if self.x > self.colclip[1]:
@@ -89,7 +109,16 @@ class CST816SSim():
         else:
             self.regs[1] = 0
 
-    def handle_key(self, key):
+    def writeto_mem(self, addr, reg, buf, pins):
+        tick(pins)
+
+        if reg == 0xa5:
+            # This will be a sleep command... which we can ignore
+            return
+
+        raise OSError
+
+    def handle_key(self, key, pins):
         """Use key presses to provoke different touchscreen events.
 
         Note: The Down key provokes an upward swipe and vice versa.
@@ -106,26 +135,113 @@ class CST816SSim():
             self.regs[1] = 4
         elif key.keysym.sym == sdl2.SDLK_RIGHT:
             self.regs[1] = 3
+        elif key.keysym.sym == sdl2.SDLK_n:
+            # Allow NEXT to be tested on the simulator
+            self.regs[1] = 253
         self.regs[3] = 0x80
-        self.raise_interrupt()
+        self.raise_interrupt(pins)
 
-    def handle_mousebutton(self, button):
+    def handle_mousebuttondown(self, button, pins):
+        self.down_x = button.x
+        self.down_y = button.y
+
+        if self.down_x < 50:
+            pins['BUTTON'].value(0)
+
+
+    def handle_mousebuttonup(self, button, pins):
+        if self.down_x < 50:
+            pins['BUTTON'].value(1)
+            return
+
+        down_x = max(0, min(239, self.down_x-SKIN['adjust'][0]))
+        down_y = max(0, min(239, self.down_y-SKIN['adjust'][1]))
+        up_x = max(0, min(239, button.x-SKIN['adjust'][0]))
+        up_y = max(0, min(239, button.y-SKIN['adjust'][1]))
+        mv_x = up_x - down_x
+        mv_y = up_y - down_y
+
+        # Swipe detection
+        if abs(mv_x) + abs(mv_y) < 24:
+            self.regs[1] = 5
+        elif abs(mv_x) > abs(mv_y):
+            self.regs[1] = 4 if mv_x > 0 else 3
+        else:
+            self.regs[1] = 1 if mv_y > 0 else 2
+
+        self.regs[4] = up_x;
+        self.regs[6] = up_y;
+        self.raise_interrupt(pins)
+
+    def press(self, x, y):
+        pins = wasp.watch.Pin.pins
         self.regs[1] = 5
-        self.regs[4] = button.x
-        self.regs[6] = button.y
-        self.raise_interrupt()
+        self.regs[4] = x
+        self.regs[6] = y
+        self.raise_interrupt(pins)
 
-    def raise_interrupt(self):
-        pass
+    def swipe(self, direction):
+        pins = wasp.watch.Pin.pins
+        if direction ==' up':
+            self.regs[1] = 1
+        elif direction == 'down':
+            self.regs[1] = 2
+        elif direction == 'left':
+            self.regs[1] = 4
+        elif direction == 'right':
+            self.regs[1] = 3
+        elif direction == 'next':
+            # Allow NEXT to be tested on the simulator
+            self.regs[1] = 253
+        self.regs[3] = 0x80
+        self.raise_interrupt(pins)
+
+    def raise_interrupt(self, pins):
+        pins['TP_INT'].raise_irq()
+
+# Derive some extra values for padding the display
+SKIN['left_pad'] = 9
+SKIN['right_pad'] = SKIN['left_pad'] + SKIN['button_profile']
+SKIN['top_pad'] = 3
+SKIN['bottom_pad'] = 3
+SKIN['window'] = (SKIN['size'][0] + SKIN['left_pad'] + SKIN['right_pad'],
+                  SKIN['size'][1] + SKIN['top_pad'] + SKIN['bottom_pad'])
+SKIN['adjust'] = (SKIN['offset'][0] + SKIN['left_pad'],
+                  SKIN['offset'][1] + SKIN['top_pad'])
 
 sdl2.ext.init()
-window = sdl2.ext.Window("ST7789", size=(WIDTH, HEIGHT))
+window = sdl2.ext.Window("ST7789", size=SKIN['window'])
 window.show()
 windowsurface = window.get_surface()
-sdl2.ext.fill(windowsurface, (0, 0, 0))
+sdl2.ext.fill(windowsurface, (0xff, 0xff, 0xff))
+skin = sdl2.ext.load_image(SKIN['fname'])
+sdl2.SDL_BlitSurface(skin, None, windowsurface, sdl2.SDL_Rect(
+        SKIN['left_pad'], SKIN['top_pad'], SKIN['size'][0], SKIN['size'][1]))
+sdl2.SDL_FreeSurface(skin)
+window.refresh()
 
 spi_st7789_sim = ST7789Sim()
 i2c_cst816s_sim = CST816SSim()
+
+def save_image(surface, fname):
+    """Save a surface as an image."""
+    raw = sdl2.ext.pixels2d(surface)
+
+    # Crop and swap the axes to ensure the final rotation is correct
+    cropped = raw[SKIN['top_pad']:-SKIN['bottom_pad']]
+    cropped = np.swapaxes(cropped, 0, 1)
+    cropped = cropped[SKIN['left_pad']:-SKIN['right_pad']]
+
+    # Split into r, g and b
+    r = cropped >> 16
+    g = (cropped >> 8) & 0xff
+    b = cropped & 0xff
+
+    # Combine into the final pixel data
+    rgb = np.uint8(np.dstack((r, g, b)))
+
+    # Save the image
+    Image.fromarray(rgb).save(fname)
 
 def tick(pins):
     events = sdl2.ext.get_events()
@@ -134,12 +250,18 @@ def tick(pins):
             sdl2.ext.quit()
             sys.exit(0)
         elif event.type == sdl2.SDL_MOUSEBUTTONDOWN:
-            i2c_cst816s_sim.handle_mousebutton(event.button)
+            i2c_cst816s_sim.handle_mousebuttondown(event.button, pins)
+        elif event.type == sdl2.SDL_MOUSEBUTTONUP:
+            i2c_cst816s_sim.handle_mousebuttonup(event.button, pins)
         elif event.type == sdl2.SDL_KEYDOWN:
-            if event.key.keysym.sym == sdl2.SDLK_TAB:
+            if event.key.keysym.sym == sdl2.SDLK_s:
+                fname = f'res/{wasp.system.app.NAME}App.png'.replace(' ', '')
+                save_image(windowsurface, fname)
+                print(f'Saved: {fname}')
+            elif event.key.keysym.sym == sdl2.SDLK_TAB:
                 pins['BUTTON'].value(0)
             else:
-                i2c_cst816s_sim.handle_key(event.key)
+                i2c_cst816s_sim.handle_key(event.key, pins)
         elif event.type == sdl2.SDL_KEYUP:
             if event.key.keysym.sym == sdl2.SDLK_TAB:
                 pins['BUTTON'].value(1)

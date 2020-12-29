@@ -5,19 +5,27 @@
 
 #include "flash.h"
 
+#include <string.h>
+
 #include <nrfx_nvmc.h>
 #include <nrf_gpio.h>
 #include <nrf_wdt.h>
 
-#include "bootloader.h"
+#include "blit.h"
 #include "util.h"
 #include "wdt.h"
+
+#ifdef FACTORY
+#include "factory_image.h"
+#else
+#include "bootloader.h"
+#endif
 
 static int percent_complete;
 static uint32_t bytes_processed;
 static uint32_t total_bytes;
 
-static void progress(uint32_t nbytes)
+static void progress(int32_t nbytes)
 {
     bytes_processed += nbytes;
 
@@ -28,20 +36,50 @@ static void progress(uint32_t nbytes)
     }
 }
 
+/* slow but no table overhead ;-) */
+uint32_t crc32(const uint8_t *data, uint32_t len)
+{
+	uint32_t crc = 0xffffffff;
+
+	for (int i=0; i<len; i++) {
+		crc = crc ^ data[i];
+		for (int j=0; j<8; j++)
+			crc = (crc >> 1) ^ (0xedb88320 & -(crc & 1));
+	}
+	return ~crc;
+}
+
+static uint32_t check_segment(const struct segment *sg)
+{
+    uint32_t sz = sg->end - sg->start;
+
+    if (sg->crc32 != crc32(sg->data, sz))
+	panic();
+
+    return sz;
+}
+
 static void flash_segment(const struct segment *sg)
 {
     uint32_t pagesz = nrfx_nvmc_flash_page_size_get();
-    
-    /* TODO: Haven't got code to handle the UICR yet */
-    if (sg->start >= 0x1000000) {
-	progress(sg->end - sg->start);
-	return;
-    }
+    uint32_t sz = sg->end - sg->start;
+    int retries = 5;
 
-    for (uint32_t addr = sg->start; addr < sg->end; addr += pagesz) {
+retry:
+    
+
+    if (sg->start < 0x1000000) {
+        for (uint32_t addr = sg->start; addr < sg->end; addr += pagesz) {
+	    nrf_wdt_reload_request_set(NRF_WDT, 0);
+	    nrfx_nvmc_page_erase(addr);
+	    progress(pagesz);
+	}
+    } else {
 	nrf_wdt_reload_request_set(NRF_WDT, 0);
-	nrfx_nvmc_page_erase(addr);
-	progress(pagesz);
+	/* special case for erasing the UICR */
+	if (sg->start >= 0x10001000 && sg->start < 0x10002000)
+	    nrfx_nvmc_uicr_erase();
+	progress(2 * sz);
     }
 
     for (uint32_t addr = sg->start; addr < sg->end; addr += 4) {
@@ -49,6 +87,17 @@ static void flash_segment(const struct segment *sg)
 	nrfx_nvmc_word_write(addr,
 		             ((uint32_t *) sg->data)[(addr - sg->start) / 4]);
 	progress(4);
+    }
+
+    if (0 != memcmp((void *) sg->start, sg->data, sz)) {
+	progress(-(2 * sz));
+	if (retries--)
+	    goto retry;
+
+	// We're in big trouble... the system is probably bricked but we
+	// don't seem to be able to do anything about it. Better to reboot
+	// and hope than to sit here wearing out the flash!
+	panic();
     }
 }
 
@@ -61,8 +110,12 @@ void flash_all(void)
     report_progress(0);
 
     for (int i=0; i<lengthof(segments); i++)
-	total_bytes += 2 * (segments[i].end - segments[i].start);
+	total_bytes += 2 * check_segment(segments + i);
 	
     for (int i=0; i<lengthof(segments); i++)
         flash_segment(segments + i);
+
+#ifdef FACTORY
+    blit_write_logo();
+#endif
 }

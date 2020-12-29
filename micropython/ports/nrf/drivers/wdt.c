@@ -28,7 +28,10 @@
 
 #if MICROPY_PY_MACHINE_WDT
 
+#include "wdt.h"
 #include "nrf_wdt.h"
+
+bool wdt_starve;
 
 #if MICROPY_HW_HAS_WDT_BUTTON
 static void button_init(void)
@@ -55,18 +58,18 @@ static bool button_pressed(void)
 
 void wdt_init(void)
 {
-    if (!nrf_wdt_started()) {
+    if (!nrf_wdt_started(NRF_WDT)) {
         // 1 => keep running during a sleep, stop during SWD debug
-        nrf_wdt_behaviour_set(1);
+        nrf_wdt_behaviour_set(NRF_WDT, 1);
 
         // timeout after 5 seconds
-        nrf_wdt_reload_value_set(5 * 32768);
+        nrf_wdt_reload_value_set(NRF_WDT, 5 * 32768);
 
         // enable the 0th channel
-        nrf_wdt_reload_request_enable(NRF_WDT_RR0);
+        nrf_wdt_reload_request_enable(NRF_WDT, NRF_WDT_RR0);
 
         // set it running
-        nrf_wdt_task_trigger(NRF_WDT_TASK_START);
+        nrf_wdt_task_trigger(NRF_WDT, NRF_WDT_TASK_START);
 
 #if MICROPY_HW_HAS_WDT_BUTTON
 	// if there was no bootloader to configure the WDT then it
@@ -85,11 +88,17 @@ void wdt_feed(bool isr)
      * implementing a (reasonably robust) long-press reset button.
      */
 #if MICROPY_HW_HAS_WDT_BUTTON
-    if (!button_pressed())
+    if (button_pressed())
+        return;
 #else
-    if (!isr)
+    if (isr)
+	return;
 #endif
-        nrf_wdt_reload_request_set(0);
+
+    if (wdt_starve)
+	return;
+
+    nrf_wdt_reload_request_set(NRF_WDT, 0);
 }
 
 #endif // MICROPY_PY_MACHINE_WDT

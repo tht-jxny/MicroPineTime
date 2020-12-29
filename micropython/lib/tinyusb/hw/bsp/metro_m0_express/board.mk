@@ -1,10 +1,11 @@
 CFLAGS += \
-  -DCONF_DFLL_OVERWRITE_CALIBRATION=0 \
-  -D__SAMD21G18A__ \
+  -flto \
   -mthumb \
   -mabi=aapcs-linux \
   -mcpu=cortex-m0plus \
   -nostdlib -nostartfiles \
+  -D__SAMD21G18A__ \
+  -DCONF_DFLL_OVERWRITE_CALIBRATION=0 \
   -DCFG_TUSB_MCU=OPT_MCU_SAMD21
 
 # All source paths should be relative to the top level.
@@ -24,14 +25,14 @@ INC += \
 	$(TOP)/hw/mcu/microchip/samd/asf4/samd21/include \
 	$(TOP)/hw/mcu/microchip/samd/asf4/samd21/hal/include \
 	$(TOP)/hw/mcu/microchip/samd/asf4/samd21/hal/utils/include \
-	$(TOP)/hw/mcu/microchip/samd/asf4/samd51/hpl/pm/ \
+	$(TOP)/hw/mcu/microchip/samd/asf4/samd21/hpl/pm/ \
 	$(TOP)/hw/mcu/microchip/samd/asf4/samd21/hpl/port \
 	$(TOP)/hw/mcu/microchip/samd/asf4/samd21/hri \
 	$(TOP)/hw/mcu/microchip/samd/asf4/samd21/CMSIS/Include
 
 # For TinyUSB port source 
 VENDOR = microchip
-CHIP_FAMILY = samd21
+CHIP_FAMILY = samd
 
 # For freeRTOS port source
 FREERTOS_PORT = ARM_CM0
